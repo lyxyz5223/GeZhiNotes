@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+  <style>
+    body {
+      background-color: #f0f0f0;
+    }
+    ul li {
+      list-style: none;
+      font-family: '楷体';
+      font-size: 30px;
+      font-weight: bold;
+      color: #fff;
+      padding: 10px;
+      margin: 5px;
+      background-color: #b51818;
+      border-radius: 500px;
+      box-shadow: 0 20px 4px rgba(56, 18, 194, 0.1);
+      text-align: center;
+    }
+    ul li::before {
+      content: "";
+      display: inline-block;
+      background-image: url('ikun.webp');
+      background-size: cover;
+      width: 32px;
+      height: 32px;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    embed:hover{
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <p>你好，我是ikun</p>
+  <ul>
+    <li>我才是ikun</li>
+    <li>不对，我才是ikun</li>
+    <li>别吵了，我才是ikun</li>
+  </ul>
+  <embed src="蔡徐坤.mp3" loop="1" controls="controls" preload="auto" style="color: rgb(0, 255, 0); font-size: 20px; font-family: '楷体';"></embed><!--嵌入音频-->
+</body>
+</html>
