@@ -1,50 +1,24 @@
-# Welcome to your Expo app 👋
+# 基于大模型“格知笔记”应用软件
+ - 简介：基于大模型，旨在帮助用户高效捕捉、组织和连接想法的创新型笔记应用。它不仅提供基础的文本记录功能，更强调非线性思维、可视化连接和主动式知识发现，旨在将用户的零散思绪编织成一张富有洞察力的知识网络，从而提升创造力、学习效率和问题解决能力。
+# 主要功能：
+## （1）自由画布与非线性记录： (核心创新功能)
+ - 无限画布：用户不再受限于传统的线性文档，可以在一个无限延伸的画布上自由创建和移动笔记块。
+ - 节点式记录：每个想法、概念或信息片段都以独立的“节点”形式存在，用户可以随意调整节点的大小、颜色和样式。
+ - 自由连接：用户可以通过拖拽连接线将不同的笔记节点连接起来，直观地表达想法之间的关联、层级和依赖关系。
+ - 视觉化组织：用户可以利用颜色、形状和分组等视觉元素对笔记进行组织和分类，形成清晰的思维导图或概念网络。
+## （2）基于大模型智能语义连接与推荐
+ - 语义分析：应用会对用户输入的文本内容进行语义分析，识别关键词、概念和潜在的关联性。
+ - 智能连接推荐：基于语义分析结果，应用会主动推荐可能相关的现有笔记节点，帮助用户发现隐藏的联系。
+ - “知识图谱”自动生成：随着用户不断记录和连接，应用可以自动生成一个可视化的“知识图谱”，展示用户的主要思考领域和知识结构。
+ - 关联搜索：用户可以通过搜索关键词，不仅找到包含该关键词的笔记，还能看到与该关键词相关的其他节点和连接。
+## （3）多媒体内容集成与嵌入：
+ - 富文本编辑：提供基本的富文本编辑功能，支持字体、颜色、粗细、列表等格式。图片、音频、视频嵌入：用户可以直接在笔记节点中嵌入图片、音频和视频文件，丰富信息表达。
+ - 网页链接与预览：支持粘贴网页链接，并提供简单的网页内容预览。
+## （4）情境化标签与智能分类：
+ - 多层级标签系统：用户可以为笔记节点添加多层级的标签，进行更精细的分类和管理。
+ - 智能标签建议：应用会根据笔记内容智能推荐相关的标签。
+ - 基于连接的分类：应用可以根据节点之间的连接关系，自动将相关的笔记分组或归类。
+ - 时间轴视图：提供按时间顺序排列的笔记视图，方便回顾和查找特定时间段的记录。
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
-
-## Get started
-
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+采用技术：React Native界面开发（移动端开发技术），网络编程；文件I/O操作，
+mysql 数据库操作；Golang后端
