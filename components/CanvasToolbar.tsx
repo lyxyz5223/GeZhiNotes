@@ -1,40 +1,10 @@
+import { COMMON_COLORS } from "@/constants/CanvasConstants";
+import { CanvasMode, CanvasToolbarProps } from "@/types/CanvasTypes";
 import { useTheme } from "@react-navigation/native";
 import React from "react";
-import { Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-
-const COMMON_COLORS = ['#007aff', '#e74c3c', '#2ecc40'];
-
-export enum CanvasMode {
-  Select = 'select',
-  Draw = 'draw',
-  Text = 'text',
-  Eraser = 'eraser',
-}
-
-export interface CanvasToolbarProps {
-  color: string;
-  setColor: (c: string) => void;
-  size: number;
-  setSize: (s: number) => void;
-  mode: CanvasMode;
-  setMode: (m: CanvasMode) => void;
-  fontFamily: string;
-  setFontFamily: (f: string) => void;
-  showColorPicker: boolean;
-  setShowColorPicker: (b: boolean) => void;
-  customColor: string;
-  setCustomColor: (c: string) => void;
-  onUndo: () => void;
-  onRedo: () => void;
-  onSave: () => void;
-  onLoad: () => void;
-  toolbarPos: { x: number, y: number };
-  toolbarHorizontalMargin: number;
-  toolbarMaxWidth: number;
-  toolbarDragging: boolean;
-  toolbarPanHandlers: any;
-  onToggleTheme: () => void;
-}
+import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import ThemedText from "./ThemedText";
+import ThemedTextInput from "./ThemedTextInput";
 
 const CanvasToolbar: React.FC<CanvasToolbarProps> = (props) => {
   const {
@@ -50,6 +20,7 @@ const CanvasToolbar: React.FC<CanvasToolbarProps> = (props) => {
   const borderColor = theme.colors.border || '#ddd';
   const activeBg = theme.colors.primary + '22' || '#e0eaff';
   const activeBorder = theme.colors.primary || '#007aff';
+  // const textColor = theme.colors.text || '#222'; // 已由 ThemedTextInput 统一处理，无需单独变量
   const iconBtnBg = theme.colors.background || '#fff';
   const iconBtnBorder = theme.colors.border || '#bbb';
 
@@ -86,22 +57,22 @@ const CanvasToolbar: React.FC<CanvasToolbarProps> = (props) => {
       >
         {/* 模式切换 */}
         <TouchableOpacity
-          style={[styles.toolbarBtn, mode === CanvasMode.Select && { backgroundColor: activeBg, borderColor: activeBorder }]}
-          onPress={() => setMode(CanvasMode.Select)}
+          style={[styles.toolbarBtn, mode === CanvasMode.Hand && { backgroundColor: activeBg, borderColor: activeBorder }]}
+          onPress={() => setMode(CanvasMode.Hand)}
         >
-          <Text style={{ fontSize: 18 }}>🔲</Text>
+          <ThemedText style={{ fontSize: 18 }}>🔲</ThemedText>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.toolbarBtn, mode === CanvasMode.Draw && { backgroundColor: activeBg, borderColor: activeBorder }]}
           onPress={() => setMode(CanvasMode.Draw)}
         >
-          <Text style={{ fontSize: 18 }}>✏️</Text>
+          <ThemedText style={{ fontSize: 18 }}>✏️</ThemedText>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.toolbarBtn, mode === CanvasMode.Text && {backgroundColor: activeBg, borderColor: activeBorder}]}
           onPress={() => setMode(CanvasMode.Text)}
         >
-          <Text style={{ fontSize: 18 }}>🔤</Text>
+          <ThemedText style={{ fontSize: 18 }}>🔤</ThemedText>
         </TouchableOpacity>
         {/* 颜色选择 */}
         <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 8 }}>
@@ -126,7 +97,7 @@ const CanvasToolbar: React.FC<CanvasToolbarProps> = (props) => {
             }}
             onPress={() => setShowColorPicker(true)}
           >
-            <Text style={{ fontSize: 16 }}>🎨</Text>
+            <ThemedText style={{ fontSize: 16 }}>🎨</ThemedText>
           </TouchableOpacity>
           {/* 颜色调色板弹窗 */}
           <Modal
@@ -137,8 +108,8 @@ const CanvasToolbar: React.FC<CanvasToolbarProps> = (props) => {
           >
             <View style={styles.colorPickerModalBg}>
               <View style={styles.colorPickerModal}>
-                <Text style={{ marginBottom: 8 }}>选择颜色</Text>
-                <TextInput
+                <ThemedText style={{ marginBottom: 8 }}>选择颜色</ThemedText>
+                <ThemedTextInput
                   value={customColor}
                   onChangeText={setCustomColor}
                   style={{
@@ -154,7 +125,7 @@ const CanvasToolbar: React.FC<CanvasToolbarProps> = (props) => {
                       borderWidth: 1, borderColor: '#888', marginRight: 8
                     }}
                   />
-                  <Text>{customColor}</Text>
+                  <ThemedText>{customColor}</ThemedText>
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
                   <TouchableOpacity
@@ -169,7 +140,7 @@ const CanvasToolbar: React.FC<CanvasToolbarProps> = (props) => {
                       setShowColorPicker(false);
                     }}
                   >
-                    <Text style={{ color: '#007aff' }}>确定</Text>
+                    <Text style={{ color: theme.colors.primary }}>确定</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -177,12 +148,18 @@ const CanvasToolbar: React.FC<CanvasToolbarProps> = (props) => {
           </Modal>
         </View>
         {/* 粗细 */}
-        <View style={{ marginLeft: 8 }}>
-          <Text style={{ fontSize: 16 }}>✚</Text>
-          <TextInput
+        <ThemedText style={{ fontSize: 16, marginLeft: 8 }}>Size:</ThemedText>
+        <View style={{ marginLeft: 0 }}>
+          <ThemedTextInput
             value={String(size)}
-            onChangeText={v => {
-              const n = Math.max(1, Math.min(32, parseInt(v) || 1));
+            onChange={v => {
+              v.nativeEvent.text = v.nativeEvent.text.replace(/[^0-9]/g, ''); // 只允许数字输入
+              const num = v.nativeEvent.text.trim();
+              if (!num || isNaN(Number(num))) {
+                setSize(0); // 如果输入无效，重置为0
+                return;
+              }
+              const n = Math.max(1, parseInt(num));
               setSize(n);
             }}
             keyboardType="numeric"
@@ -197,13 +174,13 @@ const CanvasToolbar: React.FC<CanvasToolbarProps> = (props) => {
           style={[styles.toolbarBtn, mode === CanvasMode.Eraser && {backgroundColor: activeBg, borderColor: activeBorder}, { marginLeft: 8 }]}
           onPress={() => setMode(mode === CanvasMode.Eraser ? CanvasMode.Draw : CanvasMode.Eraser)}
         >
-          <Text style={{ fontSize: 18 }}>🧽</Text>
+          <ThemedText style={{ fontSize: 18 }}>🧽</ThemedText>
         </TouchableOpacity>
         {/* 字体选择（文本模式下显示） */}
         {mode === CanvasMode.Text && (
           <View style={{ marginLeft: 8 }}>
-            <Text style={{ fontSize: 16 }}>A</Text>
-            <TextInput
+            <ThemedText style={{ fontSize: 16 }}>A</ThemedText>
+            <ThemedTextInput
               value={fontFamily}
               onChangeText={setFontFamily}
               placeholder="字体"
@@ -217,23 +194,23 @@ const CanvasToolbar: React.FC<CanvasToolbarProps> = (props) => {
         {/* 撤销/恢复/保存/读取 图标按钮 */}
         <View style={{ flexDirection: 'row', marginLeft: 8 }}>
           <TouchableOpacity style={[styles.iconBtn, {backgroundColor: iconBtnBg, borderColor: iconBtnBorder}]} onPress={onUndo}>
-            <Text style={styles.iconBtnText}>↩️</Text>
+            <ThemedText style={styles.iconBtnText}>↩️</ThemedText>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.iconBtn, {backgroundColor: iconBtnBg, borderColor: iconBtnBorder}]} onPress={onRedo}>
-            <Text style={styles.iconBtnText}>↪️</Text>
+            <ThemedText style={styles.iconBtnText}>↪️</ThemedText>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.iconBtn, {backgroundColor: iconBtnBg, borderColor: iconBtnBorder}]} onPress={onSave}>
-            <Text style={styles.iconBtnText}>💾</Text>
+            <ThemedText style={styles.iconBtnText}>💾</ThemedText>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.iconBtn, {backgroundColor: iconBtnBg, borderColor: iconBtnBorder}]} onPress={onLoad}>
-            <Text style={styles.iconBtnText}>📂</Text>
+            <ThemedText style={styles.iconBtnText}>📂</ThemedText>
           </TouchableOpacity>
           {/* 主题切换按钮 */}
           <TouchableOpacity
             style={[styles.iconBtn, {backgroundColor: iconBtnBg, borderColor: iconBtnBorder, marginLeft: 8}]}
             onPress={props.onToggleTheme}
           >
-            <Text style={styles.iconBtnText}>🌓</Text>
+            <ThemedText style={styles.iconBtnText}>🌓</ThemedText>
           </TouchableOpacity>
         </View>
       </ScrollView>

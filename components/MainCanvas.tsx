@@ -1,19 +1,14 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
-import React, { useState } from "react";
-import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { darkTheme, lightTheme } from "./CanvasTheme";
-import CanvasToolbar, { CanvasMode } from "./CanvasToolbar";
+import { INIT_SIZE as CANVAS_INIT_SIZE } from "@/constants/CanvasConstants";
+import { allThemes } from "@/constants/CanvasTheme";
+import { useUndoRedo } from "@/hooks/UseUndoRedo";
+import { CanvasMode, DrawPathInfo, EmbeddedCanvasData } from "@/types/CanvasTypes";
+import { ThemeProvider } from "@react-navigation/native";
+import React, { useCallback, useId, useState } from "react";
+import { Dimensions, StyleSheet, TouchableOpacity, View } from "react-native";
+import CanvasToolbar from "./CanvasToolbar";
 import CustomCanvas from "./CustomCanvas";
-
-const INIT_SIZE = 300;
-
-export type EmbeddedCanvasData = {
-  id: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
+import ThemeSelectorModal from "./ThemeSelectorModal";
+import ThemedText from "./ThemedText";
 
 // 工具函数：包装 setPaths 以兼容函数式 setState 写法
 function createSetPaths(setter: (paths: any[]) => void, getCurrent: () => any[]) {
@@ -27,13 +22,23 @@ function createSetPaths(setter: (paths: any[]) => void, getCurrent: () => any[])
   };
 }
 
+
 export default function MainCanvas() {
+  // 画布列表
+  const canvasIdPrefix = "canvas";
+  const canvasIdConnector = '-';
+  const defaultCanvasId = useId();
+  const createCanvasId = useCallback(
+    () => canvasIdPrefix + canvasIdConnector + defaultCanvasId + canvasIdConnector + Date.now().toString(),
+    [canvasIdPrefix, canvasIdConnector, defaultCanvasId]
+  );
   const [canvases, setCanvases] = useState<EmbeddedCanvasData[]>(
     [
-      { id: "canvas-1", x: 0, y: 0, width: Dimensions.get("window").width, height: Dimensions.get("window").height - 60 },
+      {
+        id: createCanvasId(), x: 0, y: 0, width: 0, height: 0
+      },
     ]
   );
-  const [isDark, setIsDark] = useState(false);
   // 工具栏状态
   const [color, setColor] = useState("#007aff");
   const [size, setSize] = useState(4);
@@ -41,13 +46,29 @@ export default function MainCanvas() {
   const [customColor, setCustomColor] = useState("#007aff");
   const [mode, setMode] = useState(CanvasMode.Draw);
 
-  // 全局 paths 状态
-  const [allPaths, setAllPaths] = useState<{ [id: string]: any[] }>({});
-  // redo 栈：每项 { canvasId, path }
-  const [/*redoStack*/, setRedoStack] = useState<{ canvasId: string, path: any }[]>([]);
+  // 用 useUndoRedo 管理 allPaths 撤销重做
+  const undoRedo = useUndoRedo<{ [id: string]: DrawPathInfo[] }>();
+  // 保存每一笔路径，allPaths[画布id] = 路径列表
+  const [allPaths, setAllPaths] = useState<{ [id: string]: DrawPathInfo[] }>({});
 
-  // 主题切换方法
-  const handleToggleTheme = () => setIsDark(d => !d);
+  // 主题选择弹窗
+  const [themeModalVisible, setThemeModalVisible] = useState(false);
+  const [themeIndex, setThemeIndex] = useState(0);
+  const currentTheme = allThemes[themeIndex].value;
+
+  // 主题切换方法（弹窗方式）
+  const handleToggleTheme = () => setThemeModalVisible(true);
+
+  // 处理根组件布局变化，获取屏幕尺寸
+  const handleLayout = useCallback((event: any) => {
+    const { width, height } = event.nativeEvent.layout;
+    setCanvases(cs => cs.map(
+      (canvas, index) => (index === 0 ?
+        { ...canvas, width, height }
+          : canvas
+      )
+    ));
+  }, []);
 
   // 添加新嵌入画布（居中）
   const addCanvas = () => {
@@ -55,11 +76,11 @@ export default function MainCanvas() {
       setCanvases(cs => [
           ...cs,
           {
-              id: `canvas-${Date.now()}`,
-              x: (screenWidth - INIT_SIZE) / 2,
-              y: (screenHeight - INIT_SIZE) / 2,
-              width: INIT_SIZE,
-              height: INIT_SIZE,
+            id: createCanvasId(),
+            x: (screenWidth - CANVAS_INIT_SIZE) / 2,
+            y: (screenHeight - CANVAS_INIT_SIZE) / 2,
+            width: CANVAS_INIT_SIZE,
+            height: CANVAS_INIT_SIZE,
           },
       ]);
   };
@@ -76,40 +97,45 @@ export default function MainCanvas() {
 
   // 撤销（全局撤回，找到上一笔所在的画布并撤销）
   const handleUndo = () => {
+    const last = undoRedo.undo();
     setAllPaths(prev => {
-      let lastCanvasId: string | null = null;
-      let lastIndex = -1;
-      let lastTimestamp = -1;
-      for (const cid of Object.keys(prev)) {
-        const paths = prev[cid];
-        if (paths && paths.length > 0) {
-          const ts = paths[paths.length - 1]?.timestamp || 0;
-          if (ts > lastTimestamp || (ts === -1 && lastIndex < paths.length - 1)) {
-            lastTimestamp = ts;
-            lastCanvasId = cid;
-            lastIndex = paths.length - 1;
-          }
-        }
-      }
-      if (!lastCanvasId || lastIndex < 0) return prev;
-      // 将被撤销的 path 推入 redoStack
-      const removedPath = prev[lastCanvasId][lastIndex];
-      setRedoStack(stack => [...stack, { canvasId: lastCanvasId!, path: removedPath }]);
-      return { ...prev, [lastCanvasId]: prev[lastCanvasId].slice(0, -1) };
+      return last ? last : {};
     });
   };
 
   // redo（重做）
   const handleRedo = () => {
-    setRedoStack(stack => {
-      if (stack.length === 0) return stack;
-      const last = stack[stack.length - 1];
+    const next = undoRedo.redo();
+    if (next)
+    {
       setAllPaths(prev => {
-        const prevPaths = prev[last.canvasId] || [];
-        return { ...prev, [last.canvasId]: [...prevPaths, last.path] };
+        return next;
       });
-      return stack.slice(0, -1);
+    }
+  };
+
+
+  // 更新 allPaths 的方法，替代 setAllPaths
+  const updateAllPaths = (
+    updater: (prev: { [id: string]: DrawPathInfo[] }) => { [id: string]: DrawPathInfo[] }
+  ) => {
+    setAllPaths(prev => {
+      const next = updater(prev);
+      undoRedo.push(next);
+      return next;
     });
+  };
+
+  // 传递给组件的setPaths方法
+  // 定义一个函数setPaths，接收一个参数canvas，类型为EmbeddedCanvasData
+  const setPaths = (canvas: EmbeddedCanvasData) => {
+    // 调用createSetPaths函数，传入两个参数，第一个参数为一个函数，用于更新所有路径，第二个参数为一个函数，用于获取当前canvas的路径
+    return createSetPaths(
+      // 第一个参数函数，接收一个参数paths，用于更新所有路径
+      paths => updateAllPaths(prev => ({ ...prev, [canvas.id]: paths })),
+      // 第二个参数函数，用于获取当前canvas的路径，如果当前canvas的路径不存在，则返回一个空数组
+      () => allPaths[canvas.id] || []
+    )
   };
 
   // 读取
@@ -121,16 +147,29 @@ export default function MainCanvas() {
     // TODO: 实现保存当前所有画布数据到本地存储
   };
 
+
   return (
-    <ThemeProvider value={isDark ? { ...darkTheme, fonts: DarkTheme.fonts } : { ...lightTheme, fonts: DefaultTheme.fonts }}>
-      <View style={[styles.root, { backgroundColor: isDark ? '#181a20' : '#fffbe6' }]}> {/* 根背景色同步主题 */}
+    <ThemeProvider value={currentTheme}>
+      <View style={[styles.root, { backgroundColor: currentTheme.colors.background }]}
+        onLayout={handleLayout}
+      >
+        {/* 主题选择弹窗 */}
+        <ThemeSelectorModal
+          visible={themeModalVisible}
+          currentIndex={themeIndex}
+          onSelect={idx => {
+            setThemeIndex(idx);
+            setThemeModalVisible(false);
+          }}
+          onClose={() => setThemeModalVisible(false)}
+        />
         {/* 浮动加号按钮 */}
         <TouchableOpacity
           style={styles.fab}
           onPress={addCanvas}
           activeOpacity={0.8}
         >
-          <Text style={styles.fabIcon}>＋</Text>
+          <ThemedText style={styles.fabIcon}>＋</ThemedText>
         </TouchableOpacity>
         {/* 全局工具栏 */}
         <CanvasToolbar
@@ -161,48 +200,40 @@ export default function MainCanvas() {
           {/* 渲染第一个画布 */}
           {canvases.length > 0 && canvases[0] && (
             <CustomCanvas
-              key={canvases[0].id}
               id={canvases[0].id}
+              key={canvases[0].id}
               x={canvases[0].x}
               y={canvases[0].y}
-              width={Dimensions.get("window").width}
-              height={Dimensions.get("window").height - 60}
+              width={canvases[0].width}
+              height={canvases[0].height}
               onMoveResize={updateCanvas}
               onRemove={removeCanvas}
-              onToggleTheme={handleToggleTheme}
-              canvasBg={isDark ? '#23242a' : '#fffbe6'}
+              canvasBg={currentTheme.colors.background} // 用主题背景色
               color={color}
               size={size}
-              paths={allPaths[canvases[0].id] || []}
-              setPaths={createSetPaths(
-                paths => setAllPaths(prev => ({ ...prev, [canvases[0].id]: paths })),
-                () => allPaths[canvases[0].id] || []
-              )}
+              pathsInGlobal={allPaths[canvases[0].id] || []}
+              setPathsInGlobal={setPaths(canvases[0])}
               mode={mode}
-              moveable={false} // 第一个画布不允许移动或缩放
-              resizeable={false} // 第一个画布不允许缩放
+              moveable={false}
+              resizeable={false}
             />
           )}
           {/* 渲染其他画布 */}
           {canvases.map((c, idx) => idx === 0 ? null : (
             <CustomCanvas
-              key={c.id}
               id={c.id}
+              key={c.id}
               x={c.x}
               y={c.y}
-              width={idx === 0 ? Dimensions.get("window").width : c.width}
-              height={idx === 0 ? Dimensions.get("window").height - 60 : c.height}
+              width={c.width}
+              height={c.height}
               onMoveResize={updateCanvas}
               onRemove={removeCanvas}
-              onToggleTheme={handleToggleTheme}
-              canvasBg={isDark ? '#23242a' : '#fffbe6'}
+              canvasBg={currentTheme.colors.background} // 用主题背景色
               color={color}
               size={size}
-              paths={allPaths[c.id] || []}
-              setPaths={createSetPaths(
-                paths => setAllPaths(prev => ({ ...prev, [c.id]: paths })),
-                () => allPaths[c.id] || []
-              )}
+              pathsInGlobal={allPaths[c.id] || []}
+              setPathsInGlobal={setPaths(c)}
               mode={mode}
             />
           ))}
