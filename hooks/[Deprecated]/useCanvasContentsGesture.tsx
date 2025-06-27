@@ -137,14 +137,12 @@ export function useCanvasContentsMoveResizeGesture(params: UseCanvasContentsMove
     startDist: number;
     startScale: number;
     startCenter: { x: number; y: number };
-    origin: { x: number; y: number };
     startTranslate: { x: number; y: number };
     inited: boolean;
   }>({
     startDist: 0,
     startScale: 1,
     startCenter: { x: 0, y: 0 },
-    origin: { x: 0, y: 0 },
     startTranslate: { x: 0, y: 0 },
     inited: false,
   });
@@ -158,7 +156,6 @@ export function useCanvasContentsMoveResizeGesture(params: UseCanvasContentsMove
     onResponderMove: (evt: GestureResponderEvent) => {
       if (evt.nativeEvent.touches.length < 2) return;
       const [t1, t2] = evt.nativeEvent.touches;
-      const layout = { x: 0, y: 0 };
       const currCenter = {
         x: (t1.pageX + t2.pageX) / 2,
         y: (t1.pageY + t2.pageY) / 2,
@@ -172,25 +169,22 @@ export function useCanvasContentsMoveResizeGesture(params: UseCanvasContentsMove
           x: canvasContentsTransform.translateX,
           y: canvasContentsTransform.translateY,
         };
-        // 计算锚点（内容坐标系下）
-        gestureState.current.origin = {
-          x: (currCenter.x - layout.x - canvasContentsTransform.translateX) / canvasContentsTransform.scale,
-          y: (currCenter.y - layout.y - canvasContentsTransform.translateY) / canvasContentsTransform.scale,
-        };
         gestureState.current.inited = true;
       }
-      const { startDist, startScale, origin } = gestureState.current;
+      const { startDist, startScale, startCenter, startTranslate } = gestureState.current;
       if (startDist === 0) return;
+      // 新的缩放因子
       const scale = startScale * (currDist / startDist);
-      const translateX = currCenter.x - layout.x - scale * origin.x;
-      const translateY = currCenter.y - layout.y - scale * origin.y;
+      // 以手势中心为锚点，缩放时保证锚点视觉位置不变
+      const anchorX = (startCenter.x - startTranslate.x) / startScale;
+      const anchorY = (startCenter.y - startTranslate.y) / startScale;
+      const translateX = currCenter.x - scale * anchorX;
+      const translateY = currCenter.y - scale * anchorY;
       setCanvasContentsTransform(prev => ({
         ...prev,
         scale,
         translateX,
         translateY,
-        originX: origin.x,
-        originY: origin.y,
       }));
     },
     onResponderRelease: () => {

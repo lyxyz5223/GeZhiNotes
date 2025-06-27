@@ -3,6 +3,8 @@ import { CanvasMode, CanvasToolbarProps } from "@/types/CanvasTypes";
 import { useTheme } from "@react-navigation/native";
 import React from "react";
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import IconButton from "./IconButton";
+import ModeSelector from "./ModeSelector";
 import ThemedText from "./ThemedText";
 import ThemedTextInput from "./ThemedTextInput";
 
@@ -47,33 +49,11 @@ const CanvasToolbar: React.FC<CanvasToolbarProps> = (props) => {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          minWidth: '100%',
-          flexGrow: 1,
-        }}
-        style={{ flex: 1 }}
+        contentContainerStyle={styles.toolbarScrollContent}
+        style={styles.toolbarScroll}
       >
         {/* 模式切换 */}
-        <TouchableOpacity
-          style={[styles.toolbarBtn, mode === CanvasMode.Hand && { backgroundColor: activeBg, borderColor: activeBorder }]}
-          onPress={() => setMode(CanvasMode.Hand)}
-        >
-          <ThemedText style={{ fontSize: 18 }}>🔲</ThemedText>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.toolbarBtn, mode === CanvasMode.Draw && { backgroundColor: activeBg, borderColor: activeBorder }]}
-          onPress={() => setMode(CanvasMode.Draw)}
-        >
-          <ThemedText style={{ fontSize: 18 }}>✏️</ThemedText>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.toolbarBtn, mode === CanvasMode.Text && {backgroundColor: activeBg, borderColor: activeBorder}]}
-          onPress={() => setMode(CanvasMode.Text)}
-        >
-          <ThemedText style={{ fontSize: 18 }}>🔤</ThemedText>
-        </TouchableOpacity>
+        <ModeSelector mode={mode} setMode={setMode} />
         {/* 颜色选择 */}
         <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 8 }}>
           {COMMON_COLORS.map(c => (
@@ -193,18 +173,10 @@ const CanvasToolbar: React.FC<CanvasToolbarProps> = (props) => {
         )}
         {/* 撤销/恢复/保存/读取 图标按钮 */}
         <View style={{ flexDirection: 'row', marginLeft: 8 }}>
-          <TouchableOpacity style={[styles.iconBtn, {backgroundColor: iconBtnBg, borderColor: iconBtnBorder}]} onPress={onUndo}>
-            <ThemedText style={styles.iconBtnText}>↩️</ThemedText>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.iconBtn, {backgroundColor: iconBtnBg, borderColor: iconBtnBorder}]} onPress={onRedo}>
-            <ThemedText style={styles.iconBtnText}>↪️</ThemedText>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.iconBtn, {backgroundColor: iconBtnBg, borderColor: iconBtnBorder}]} onPress={onSave}>
-            <ThemedText style={styles.iconBtnText}>💾</ThemedText>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.iconBtn, {backgroundColor: iconBtnBg, borderColor: iconBtnBorder}]} onPress={onLoad}>
-            <ThemedText style={styles.iconBtnText}>📂</ThemedText>
-          </TouchableOpacity>
+          <IconButton onPress={onUndo} icon={"↩️"} />
+          <IconButton onPress={onRedo} icon={"↪️"} />
+          <IconButton onPress={onSave} icon={"💾"} />
+          <IconButton onPress={onLoad} icon={"📂"} />
           {/* 主题切换按钮 */}
           <TouchableOpacity
             style={[styles.iconBtn, {backgroundColor: iconBtnBg, borderColor: iconBtnBorder, marginLeft: 8}]}
@@ -278,6 +250,15 @@ const styles = StyleSheet.create({
     width: 220,
     alignItems: 'center',
     elevation: 8,
+  },
+  toolbarScrollContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: '100%',
+    flexGrow: 1,
+  },
+  toolbarScroll: {
+    flex: 1,
   },
 });
 

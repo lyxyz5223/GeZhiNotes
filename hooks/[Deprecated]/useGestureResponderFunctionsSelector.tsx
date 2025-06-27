@@ -1,8 +1,9 @@
-import { UseGestureResponderFunctionsSelectorParams } from '@/types/CanvasGestureTypes';
+import { CanvasContext } from '@/types/CanvasGestureTypes';
 import { CanvasMode } from '@/types/CanvasTypes';
 import { mergeResponderHandlers } from '@/utils/CanvasUtils';
-import { useCanvasContentsGesture, useDrawGesture } from './UseCanvasContentsGesture';
-import { useCanvasMoveResizeGesture } from './UseMoveResizeGesture';
+import { useCanvasMoveResizeGesture } from './useMoveResizeGesture';
+import { useCanvasContentsGesture, useCanvasContentsMoveResizeGesture } from './useCanvasContentsGesture';
+import { useCanvasImageInsertGesture } from './useCanvasImageInsertGesture';
 
 
 /*
@@ -11,9 +12,15 @@ import { useCanvasMoveResizeGesture } from './UseMoveResizeGesture';
  * @return 返回对应模式下的手势响应函数
 */
 export function useGestureResponderFunctionsSelector(
-  params: UseGestureResponderFunctionsSelectorParams
+  params: CanvasContext
 ) {
   // 顶层调用所有相关 Hook，避免条件调用
+  const canvasContentsMoveResizeGesture = useCanvasContentsMoveResizeGesture(
+    {
+      ...params.contentsTransform
+    }
+  );
+
   const canvasContentsGesture = useCanvasContentsGesture({
     id: params.id ?? '',
     color: params.color ?? '#000',
@@ -33,6 +40,21 @@ export function useGestureResponderFunctionsSelector(
     moveable: params.moveable,
     resizeable: params.resizeable,
   });
+  
+  // 兼容全局数据结构，直接从 params.images/params.setImages 获取
+  const setImages = params.globalData?.setImages;
+
+  // 图片模式下点击画布插入图片（独立hook）
+  const imageInsertGesture = useCanvasImageInsertGesture(
+    params.mode,
+    setImages,
+    {
+      x: params.x,
+      y: params.y,
+      width: params.width,
+      height: params.height
+    }
+  );
 
   // 手势函数列表，支持多函数与条件
   const gestureFunctions = {
@@ -47,6 +69,10 @@ export function useGestureResponderFunctionsSelector(
         func: moveResizeGesture,
         condition: params.moveable || params.resizeable
       },
+    ],
+    [CanvasMode.Image]: [
+      { func: imageInsertGesture, condition: !!setImages },
+      // { func: canvasContentsMoveResizeGesture, condition: true },
     ],
   };
 

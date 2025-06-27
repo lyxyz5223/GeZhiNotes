@@ -18,10 +18,8 @@ export function calculateRelativePathPosition(
   canvasLayout: { x: number; y: number },
   transform: TransformType
 ) {
-  const originX = transform.originX || 0;
-  const originY = transform.originY || 0;
-  const relX = (((pageX - canvasLayout.x) - originX) / transform.scale + originX) - transform.translateX;
-  const relY = (((pageY - canvasLayout.y) - originY) / transform.scale + originY) - transform.translateY;
+  const relX = (pageX - canvasLayout.x - transform.translateX) / transform.scale;
+  const relY = (pageY - canvasLayout.y - transform.translateY) / transform.scale;
   return [relX, relY];
 }
 

@@ -1,4 +1,4 @@
-import { CanvasMode, DrawPathInfo, TransformType } from "./CanvasTypes";
+import { CanvasMode, CustomCanvasProps, DrawPathInfo, TransformType } from "./CanvasTypes";
 
 // 通用 StateUpdater 类型
 export type StateUpdater<T> = (updater: T | ((prev: T) => T)) => void;
@@ -30,7 +30,7 @@ export interface CanvasDrawParams {
 export type UseDrawGestureParams = CanvasDrawParams;
 export type UseCanvasContentsGestureParams = CanvasDrawParams;
 export type UseCanvasContentsMoveResizeGestureParams = CanvasTransformParams;
-export type UseGestureResponderFunctionsSelectorParams = UseCanvasContentsGestureParams & UseCanvasMoveResizeGestureParams;
+export type CanvasContext = CustomCanvasProps & { contentsTransform: CanvasTransformParams; canvasViewRef: React.RefObject<any>; };
 
 // 画布移动/缩放手势参数类型
 export interface UseCanvasMoveResizeGestureParams {

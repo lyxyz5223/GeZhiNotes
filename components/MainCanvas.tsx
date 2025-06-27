@@ -1,8 +1,10 @@
 import { INIT_SIZE as CANVAS_INIT_SIZE } from "@/constants/CanvasConstants";
 import { allThemes } from "@/constants/CanvasTheme";
-import { useUndoRedo } from "@/hooks/UseUndoRedo";
-import { CanvasMode, DrawPathInfo, EmbeddedCanvasData } from "@/types/CanvasTypes";
+import { useUndoRedo } from "@/hooks/useUndoRedo";
+import { AudioBlockInfo, CanvasMode, CanvasType, DrawPathInfo, EmbeddedCanvasData, ImageBlockInfo, LinkBlockInfo, TextBlockInfo, VideoBlockInfo, WebLinkBlockInfo } from "@/types/CanvasTypes";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemeProvider } from "@react-navigation/native";
+import { Skia } from '@shopify/react-native-skia';
 import React, { useCallback, useId, useState } from "react";
 import { Dimensions, StyleSheet, TouchableOpacity, View } from "react-native";
 import CanvasToolbar from "./CanvasToolbar";
@@ -10,18 +12,89 @@ import CustomCanvas from "./CustomCanvas";
 import ThemeSelectorModal from "./ThemeSelectorModal";
 import ThemedText from "./ThemedText";
 
-// 工具函数：包装 setPaths 以兼容函数式 setState 写法
-function createSetPaths(setter: (paths: any[]) => void, getCurrent: () => any[]) {
-  return (updater: any[] | ((prev: any[]) => any[])) => {
-    if (typeof updater === 'function') {
-      const prev = getCurrent();
-      setter((updater as (prev: any[]) => any[])(prev));
-    } else {
-      setter(updater);
-    }
-  };
+
+type GlobalPathsType = { [id: string]: DrawPathInfo[] };
+type GlobalTextsType = { [id: string]: TextBlockInfo[] };
+type GlobalImagesType = { [id: string]: ImageBlockInfo[] };
+type GlobalAudiosType = { [id: string]: AudioBlockInfo[] };
+type GlobalCanvasLinksType = { [id: string]: LinkBlockInfo[] };
+type GlobalVideosType = { [id: string]: VideoBlockInfo[] };
+type GlobalWebLinksType = { [id: string]: WebLinkBlockInfo[] };
+
+// 全局画布数据结构，包含所有类型
+interface GlobalCanvasState {
+  paths: GlobalPathsType;
+  texts: GlobalTextsType;
+  images: GlobalImagesType;
+  audios: GlobalAudiosType;
+  videos: GlobalVideosType;
+  links: GlobalCanvasLinksType;
+  webLinks: GlobalWebLinksType;
 }
 
+// 为画布的每个属性生成更新函数
+// 用法: makePerCanvasStateSetter('paths', setGlobalState)(id)(paths);
+function makePerCanvasStateSetter<K extends keyof GlobalCanvasState>(
+  key: K,
+  setGlobalState: React.Dispatch<React.SetStateAction<GlobalCanvasState>>
+) {
+  type ItemType = GlobalCanvasState[K][string];
+  return (id: string) => (updater: ItemType | ((previous: ItemType) => ItemType)) => {
+    setGlobalState(prevState => {
+      const prevValue = prevState[key][id] as ItemType ?? ([] as unknown as ItemType);
+      const newValue = typeof updater === 'function' ? (updater as (prev: ItemType) => ItemType)(prevValue) : updater;
+      return {
+        ...prevState,
+        [key]: {
+          ...prevState[key],
+          [id]: newValue,
+        },
+      };
+    });
+  };
+}
+// 动态生成所有 setter
+// 用法: createAllGlobalStateSetters(setGlobalState)(id).setPaths(paths);
+// 返回一个包含所有 setter 方法(如 setPaths、setTexts 等)作为返回值的参数为id的函数对象
+const createAllGlobalStateSetters = (
+  setGlobalState: React.Dispatch<React.SetStateAction<GlobalCanvasState>>,
+  callback: (id: string, setterFunctionName: string, newValue: any, newGlobalData: GlobalCanvasState) => void = () => {}// 回调函数，当每个 setter 被调用时执行（可选，默认为空函数）
+) =>
+  (id: string) => {
+  const keys = Object.keys(initialGlobalState) as (keyof GlobalCanvasState)[];
+  const setters: any = {};
+  keys.forEach(key => {
+    // setter 名如 setPaths、setTexts
+    const setterName = 'set' + key.charAt(0).toUpperCase() + key.slice(1);
+    setters[setterName] = (newValue: any) => {
+      setGlobalState(prevState => {
+        const prevValue = prevState[key][id] as any ?? [];
+        const updatedValue = typeof newValue === 'function' ? newValue(prevValue) : newValue;
+        const newState = {
+          ...prevState,
+          [key]: {
+            ...prevState[key],
+            [id]: updatedValue,
+          }
+        };
+        callback(id, setterName, updatedValue, newState); // 这里拿到 set 后的最新 globalState
+        return newState;
+      });
+    };
+  });
+  return setters;
+};
+
+
+const initialGlobalState: GlobalCanvasState = {
+  paths: {},
+  texts: {},
+  images: {},
+  audios: {},
+  videos: {},
+  links: {},
+  webLinks: {},
+};
 
 export default function MainCanvas() {
   // 画布列表
@@ -46,11 +119,18 @@ export default function MainCanvas() {
   const [customColor, setCustomColor] = useState("#007aff");
   const [mode, setMode] = useState(CanvasMode.Draw);
 
-  // 用 useUndoRedo 管理 allPaths 撤销重做
-  const undoRedo = useUndoRedo<{ [id: string]: DrawPathInfo[] }>();
-  // 保存每一笔路径，allPaths[画布id] = 路径列表
-  const [allPaths, setAllPaths] = useState<{ [id: string]: DrawPathInfo[] }>({});
+  // 用 useUndoRedo 管理全局画布数据（所有类型）撤销重做
+  const undoRedo = useUndoRedo<GlobalCanvasState>();
+  const [globalState, setGlobalState] = useState<GlobalCanvasState>(initialGlobalState);
 
+  const globalDataSetters = createAllGlobalStateSetters(
+    setGlobalState,
+    (id, setterName, newValue, newGlobalData) => {
+      // 将操作记录到撤销重做栈
+      undoRedo.push(newGlobalData);
+    }
+  );
+  
   // 主题选择弹窗
   const [themeModalVisible, setThemeModalVisible] = useState(false);
   const [themeIndex, setThemeIndex] = useState(0);
@@ -95,57 +175,91 @@ export default function MainCanvas() {
     setCanvases(cs => cs.filter(c => c.id !== id));
   };
 
-  // 撤销（全局撤回，找到上一笔所在的画布并撤销）
+  // 撤销
   const handleUndo = () => {
     const last = undoRedo.undo();
-    setAllPaths(prev => {
-      return last ? last : {};
-    });
+    setGlobalState(prev => last ? last : initialGlobalState);
   };
-
-  // redo（重做）
+  // 重做
   const handleRedo = () => {
     const next = undoRedo.redo();
-    if (next)
-    {
-      setAllPaths(prev => {
-        return next;
+    if (next) setGlobalState(next);
+  };
+
+
+  // 监听 globalState 变化，自动 push 到撤销重做栈
+  // 这种逻辑有问题！故注释掉
+  // useEffect(() => {
+  //   undoRedo.push(globalState);
+  //   console.log('Global state updated, current state:', globalState);
+  // }, [undoRedo, globalState]);
+
+
+  // 持久化存储 key
+  const STORAGE_KEY = 'GeZhiNotes:canvasData';
+  // 读取本地所有画布和全局数据
+  const handleLoad = async () => {
+    try {
+      const data = await AsyncStorage.getItem(STORAGE_KEY);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (parsed.canvases && Array.isArray(parsed.canvases)) setCanvases(parsed.canvases);
+        if (parsed.globalState && typeof parsed.globalState === 'object') {
+          // 路径反序列化
+          const fixedPaths: GlobalPathsType = {};
+          Object.entries(parsed.globalState.paths || {}).forEach(([cid, arr]) => {
+            fixedPaths[cid] = Array.isArray(arr)
+              ? (arr.map((item: any) => {
+                  if (item && typeof item.path === 'string' && item.path.startsWith('M')) {
+                    return { ...item, path: Skia.Path.MakeFromSVGString(item.path) };
+                  }
+                  return item;
+                }) as DrawPathInfo[])
+              : (arr as DrawPathInfo[]);
+          });
+          setGlobalState({
+            ...initialGlobalState,
+            ...parsed.globalState,
+            paths: fixedPaths,
+          });
+        }
+      }
+    } catch (e) {
+      console.error('读取失败', e);
+    }
+  };
+  // 保存所有画布和全局数据到本地
+  const handleSave = async () => {
+    try {
+      // 路径序列化
+      const serializablePaths: GlobalPathsType = {};
+      Object.entries(globalState.paths).forEach(([canvasId, arr]) => {
+        serializablePaths[canvasId] = Array.isArray(arr) ? arr.map(
+          (item: any) => {
+              if (item && item.path && typeof item.path.toSVGString === 'function') {
+                return { ...item, path: item.path.toSVGString() };
+              }
+              if (item && typeof item.path === 'string') {
+                return { ...item };
+              }
+              return item;
+            })
+          : arr;
       });
+      const data = JSON.stringify({
+        canvases: canvases,
+        globalState: { ...globalState, paths: serializablePaths },
+      });
+      await AsyncStorage.setItem(STORAGE_KEY, data);
+    } catch (e) {
+      console.error('保存失败', e);
     }
   };
 
-
-  // 更新 allPaths 的方法，替代 setAllPaths
-  const updateAllPaths = (
-    updater: (prev: { [id: string]: DrawPathInfo[] }) => { [id: string]: DrawPathInfo[] }
-  ) => {
-    setAllPaths(prev => {
-      const next = updater(prev);
-      undoRedo.push(next);
-      return next;
-    });
-  };
-
-  // 传递给组件的setPaths方法
-  // 定义一个函数setPaths，接收一个参数canvas，类型为EmbeddedCanvasData
-  const setPaths = (canvas: EmbeddedCanvasData) => {
-    // 调用createSetPaths函数，传入两个参数，第一个参数为一个函数，用于更新所有路径，第二个参数为一个函数，用于获取当前canvas的路径
-    return createSetPaths(
-      // 第一个参数函数，接收一个参数paths，用于更新所有路径
-      paths => updateAllPaths(prev => ({ ...prev, [canvas.id]: paths })),
-      // 第二个参数函数，用于获取当前canvas的路径，如果当前canvas的路径不存在，则返回一个空数组
-      () => allPaths[canvas.id] || []
-    )
-  };
-
-  // 读取
-  const handleLoad = async () => {
-    // TODO: 实现读取本地存储的画布数据
-  };
-  // 保存
-  const handleSave = async () => {
-    // TODO: 实现保存当前所有画布数据到本地存储
-  };
+  // 启动时自动读取
+  // React.useEffect(() => {
+  //   handleLoad();
+  // }, []);
 
 
   return (
@@ -206,16 +320,27 @@ export default function MainCanvas() {
               y={canvases[0].y}
               width={canvases[0].width}
               height={canvases[0].height}
+              canvasType={CanvasType.Main} // 主画布类型
               onMoveResize={updateCanvas}
               onRemove={removeCanvas}
               canvasBg={currentTheme.colors.background} // 用主题背景色
               color={color}
               size={size}
-              pathsInGlobal={allPaths[canvases[0].id] || []}
-              setPathsInGlobal={setPaths(canvases[0])}
               mode={mode}
               moveable={false}
               resizeable={false}
+              globalData={
+                {
+                  paths: globalState.paths[canvases[0].id] || [],
+                  texts: globalState.texts[canvases[0].id] || [],
+                  images: globalState.images[canvases[0].id] || [],
+                  audios: globalState.audios[canvases[0].id] || [],
+                  videos: globalState.videos[canvases[0].id] || [],
+                  links: globalState.links[canvases[0].id] || [],
+                  webLinks: globalState.webLinks[canvases[0].id] || [],
+                  ...globalDataSetters(canvases[0].id)
+                }
+              }
             />
           )}
           {/* 渲染其他画布 */}
@@ -227,14 +352,25 @@ export default function MainCanvas() {
               y={c.y}
               width={c.width}
               height={c.height}
+              canvasType={CanvasType.Child} // 子画布类型
               onMoveResize={updateCanvas}
               onRemove={removeCanvas}
               canvasBg={currentTheme.colors.background} // 用主题背景色
               color={color}
               size={size}
-              pathsInGlobal={allPaths[c.id] || []}
-              setPathsInGlobal={setPaths(c)}
               mode={mode}
+              globalData={
+                {
+                  paths: globalState.paths[c.id] || [],
+                  texts: globalState.texts[c.id] || [],
+                  images: globalState.images[c.id] || [],
+                  audios: globalState.audios[c.id] || [],
+                  videos: globalState.videos[c.id] || [],
+                  links: globalState.links[c.id] || [],
+                  webLinks: globalState.webLinks[c.id] || [],
+                  ...globalDataSetters(c.id)
+                }
+              }
             />
           ))}
         </View>
@@ -242,6 +378,7 @@ export default function MainCanvas() {
     </ThemeProvider>
   );
 }
+
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#f5f5f5' },
