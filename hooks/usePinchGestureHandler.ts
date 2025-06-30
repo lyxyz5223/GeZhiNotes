@@ -3,14 +3,51 @@ import { useMemo, useRef } from "react";
 import { Gesture } from "react-native-gesture-handler";
 
 /**
+ * 用于处理画布内容的拖动（Pan）
+ */
+export const usePanContentsGestureHandler = (canvasContext: CanvasContext) => {
+  const startTranslateRef = useRef({ x: 0, y: 0 });
+  return useMemo(() =>
+    Gesture.Pan()
+      .runOnJS(true)
+      .onBegin((event) => {
+        // 记录初始平移
+        startTranslateRef.current = {
+          x: canvasContext.contentsTransform.value.translateX,
+          y: canvasContext.contentsTransform.value.translateY,
+        };
+      })
+      .onUpdate((event) => {
+        console.log('ds figjdhskkfdbhunidmosdnfbfhhnidmos,pdfsfkkkkkkkkkkk哈哈哈哈哈哈哈哈哈哈哈哈哈哈哈哈哈哈哈')
+        // 只处理单指拖动
+        if (event.numberOfPointers !== 1) return;
+        const dx = event.translationX;
+        const dy = event.translationY;
+        const startTranslate = startTranslateRef.current;
+        const newTranslateX = startTranslate.x + dx;
+        const newTranslateY = startTranslate.y + dy;
+        canvasContext.contentsTransform.setValue?.((prev) => ({
+          ...prev,
+          translateX: newTranslateX,
+          translateY: newTranslateY,
+        }));
+        // 可选：输出调试信息
+        // console.log('Pan update:', { translateX: newTranslateX, translateY: newTranslateY });
+      })
+      .onEnd(() => {
+        // 拖动结束，可选收尾
+      })
+    , [canvasContext.contentsTransform]);
+};
+
+/**
  * 用于处理画布内容的缩放
  */
-export const usePinchContentsGestureHandler = (canvasContext: CanvasContext) => {
+export const usePinchContentsGestureHandler = (canvasContext: CanvasContext, childrenGestures: any[]) => {
   const startScaleRef = useRef(1);
   const startFocalRef = useRef({ x: 0, y: 0 });
   const startTranslateRef = useRef({ x: 0, y: 0 });
-
-  return useMemo(() => Gesture.Pinch()
+  return useMemo(() => Gesture.Pinch().simultaneousWithExternalGesture()
     .runOnJS(true)
     .onBegin((event) => {
       // 记录缩放起点
@@ -42,6 +79,11 @@ export const usePinchContentsGestureHandler = (canvasContext: CanvasContext) => 
         translateX: newTranslateX,
         translateY: newTranslateY,
       }));
+      console.log('Pinch update:', {
+        scale: clampedScale,
+        translateX: newTranslateX,
+        translateY: newTranslateY,
+      });
     })
     .onEnd(() => {
       // 缩放结束，可选收尾

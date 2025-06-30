@@ -27,7 +27,7 @@ export default function MainCanvas() {
   const [canvases, setCanvases] = useState<EmbeddedCanvasData[]>(
     [
       {
-        id: createCanvasId(), x: 0, y: 0, width: 0, height: 0
+        id: createCanvasId(), parentId: '', x: 0, y: 0, width: 0, height: 0
       },
     ]
   );
@@ -41,7 +41,12 @@ export default function MainCanvas() {
   // 用 useUndoRedo 管理全局画布数据（所有类型）撤销重做
   const undoRedo = useUndoRedo<GlobalCanvasStates>();
   const [globalState, setGlobalState] = useState<GlobalCanvasStates>(initialGlobalStates);
-
+  const memoizedGlobalState = React.useMemo(() => {
+    return {
+      value: globalState,
+      setValue: setGlobalState
+    }
+  }, [globalState, setGlobalState]);
   const handleGlobalStateChange = useCallback((id: string, stateName: string, newValue: any, newGlobalData: GlobalCanvasStates) => {
       undoRedo.push(newGlobalData);// 将操作后的新全局记录进入撤销栈
   }, [undoRedo]);
@@ -87,19 +92,21 @@ export default function MainCanvas() {
   }, []);
 
   // 添加新嵌入画布（居中）
-  const addCanvas = () => {
-      const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
-      setCanvases(cs => [
-          ...cs,
-          {
-            id: createCanvasId(),
-            x: (screenWidth - CANVAS_INIT_SIZE) / 2,
-            y: (screenHeight - CANVAS_INIT_SIZE) / 2,
-            width: CANVAS_INIT_SIZE,
-            height: CANVAS_INIT_SIZE,
-          },
-      ]);
-  };
+  // const addCanvas = () => {
+  //     const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
+  //     setCanvases(cs => [
+  //         ...cs,
+  //         {
+  //           id: createCanvasId(),
+  //           parentId: firstCanvasId,
+  //           x: (screenWidth - CANVAS_INIT_SIZE) / 2,
+  //           y: (screenHeight - CANVAS_INIT_SIZE) / 2,
+  //           width: CANVAS_INIT_SIZE,
+  //           height: CANVAS_INIT_SIZE,
+  //         },
+  //     ]);
+  // };
+
   // 拖动/缩放回调
   const updateCanvas = (id: string, x: number, y: number, width: number, height: number) => {
     // cs.map遍历，修改指定id的画布数据，然后重新设置canvases
@@ -255,6 +262,7 @@ export default function MainCanvas() {
           {canvases.length > 0 && canvases[0] && (
             <CustomCanvas
               id={canvases[0].id}
+              parentId={canvases[0].parentId} // 主画布没有父画布
               key={canvases[0].id}
               x={canvases[0].x}
               y={canvases[0].y}
@@ -271,6 +279,8 @@ export default function MainCanvas() {
               resizeable={false}
               fullscreen={fullscreenObj}
               globalData={memoizedGlobalData}
+              globalState={memoizedGlobalState} // 传递全局状态
+              globalUndoRedo={undoRedo} // 传递撤销重做对象
             />
           )}
           {/* 渲染其他画布 */}

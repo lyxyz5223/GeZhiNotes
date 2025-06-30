@@ -1,4 +1,4 @@
-import { AudioBlockInfo, ModuleInsertOptionsType, TextBlockInfo, VideoBlockInfo, WebLinkBlockInfo } from '@/types/CanvasTypes';
+import { AudioBlockInfo, EmbeddedCanvasData, ModuleInsertOptionsType, TextBlockInfo, VideoBlockInfo, WebLinkBlockInfo } from '@/types/CanvasTypes';
 import { pickAndInsertImage } from './CanvasAddImageUtils';
 import { useId } from 'react';
 import { INIT_SIZE as CANVAS_INIT_SIZE } from '@/constants/CanvasConstants';
@@ -43,10 +43,10 @@ export function insertWebLink(globalData: any, x: number, y: number, options?: M
   if (setValue) {
     const newLink: WebLinkBlockInfo = {
       id: Date.now().toString(),
-      url: 'https://',
+      url: 'https://cn.bing.com/',
       x,
       y,
-      title: options?.title ?? '新链接',
+      title: options?.title ?? '必应搜索',
     };
     setValue((prev: WebLinkBlockInfo[] = []) => [...prev, newLink]);
   }
@@ -69,13 +69,13 @@ export function insertCanvas(globalData: any, x: number, y: number, options?: Mo
   const setValue = globalData?.canvases.setValue;
   const i = Date.now().toString();
   if (setValue) {
-    const newCanvas = {
+    const newCanvas: EmbeddedCanvasData = {
       id: options?.id ? options.id + '-' + i : i, // 生成唯一id
-      x,
-      y,
-      width: options?.width ?? CANVAS_INIT_SIZE,
-      height: options?.height ?? CANVAS_INIT_SIZE,
-      backgroundColor: options?.backgroundColor ?? '#ffffff',
+      parentId: options?.parentId ?? '', // 父画布ID
+      x: x - CANVAS_INIT_SIZE / 2,
+      y: y - CANVAS_INIT_SIZE / 2,
+      width: CANVAS_INIT_SIZE,
+      height: CANVAS_INIT_SIZE,
     };
     setValue((prev: any[] = []) => [...prev, newCanvas]);
   }

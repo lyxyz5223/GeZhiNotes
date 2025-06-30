@@ -1,7 +1,7 @@
 import { CanvasMode, CustomCanvasProps, DrawPathInfo } from "@/types/CanvasTypes";
 import { createPathFromPoints } from "@/utils/CanvasUtils";
 import { Canvas, Group } from '@shopify/react-native-skia';
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useSharedValue } from 'react-native-reanimated';
@@ -13,12 +13,9 @@ function CanvasDrawModule({ props, extraParams }: { props: CustomCanvasProps; ex
   const id = props.id || '';
   // 画布 transform 透传
   const { canvasContentsTransform } = extraParams.contentsTransform || { canvasContentsTransform: { scale: 1, translateX: 0, translateY: 0 } };
-  const transform = [
-    { translateX: canvasContentsTransform.translateX },
-    { translateY: canvasContentsTransform.translateY },
-    { scale: canvasContentsTransform.scale },
-  ];
-
+  // transform 始终与 canvasContentsTransform 保持同步
+  const transform = canvasContentsTransform;
+  
   const currentDrawPathInfo = useSharedValue<DrawPathInfo | null>(null);
   const [renderedPath, setRenderedPath] = useState<DrawPathInfo | null>(null);
   const beginRenderedPath = (x: number, y: number, timestamp: number) => {
@@ -95,10 +92,16 @@ function CanvasDrawModule({ props, extraParams }: { props: CustomCanvasProps; ex
       runOnJS(resetRenderedPath)();
       console.log('asyncPanGesture onFinalize');
     });
+  const willDraw = useRef(true);
   const syncPanGesture = Gesture.Pan()
-    .enabled(props.mode?.value === CanvasMode.Draw || props.mode?.value === CanvasMode.Eraser)
+    .maxPointers(1) // 限制为单指手势
+    .minPointers(1) // 至少需要一个手指
     .runOnJS(true) // 在 JS 端运行
     .onBegin(e => {
+      if (e.numberOfPointers > 1) {
+        willDraw.current = false; // 仅单指生效
+        return;
+      }
       if (props.mode?.value !== CanvasMode.Draw && props.mode?.value !== CanvasMode.Eraser) return;
       const timestamp = Date.now();
       const { x, y } = e;
@@ -106,19 +109,30 @@ function CanvasDrawModule({ props, extraParams }: { props: CustomCanvasProps; ex
       console.log('syncPanGesture onBegin, current canvas id:', id);
     })
     .onUpdate(e => {
+      if (e.numberOfPointers > 1) {
+        willDraw.current = false; // 仅单指生效
+        return;
+      }
       if (!renderedPath) return;
       const newPoint = { x: e.x, y: e.y };
       const newPoints = [...renderedPath.points, newPoint];
       updateRenderedPath(newPoints);
     })
-    .onEnd(() => {
+    .onEnd((e) => {
+      willDraw.current = true; // 仅单指生效
+      if (e.numberOfPointers > 1) {
+        resetRenderedPath();
+        return;
+      }
       setGlobalPaths();
       console.log('syncPanGesture onEnd');
     })
     .onFinalize(() => {
+      willDraw.current = true; // 仅单指生效
       resetRenderedPath();
       console.log('syncPanGesture onFinalize');
-    });
+    })
+    .enabled(willDraw && (props.mode?.value === CanvasMode.Draw || props.mode?.value === CanvasMode.Eraser));
 
 
   return (
@@ -127,7 +141,12 @@ function CanvasDrawModule({ props, extraParams }: { props: CustomCanvasProps; ex
         { /*, backgroundColor: '#ff000022'*/ }
         <Animated.View style={{ flex: 1 }} pointerEvents="box-none">
           <Canvas style={[styles.canvas]} pointerEvents="none">
-            <Group transform={transform} origin={{ x: 0, y: 0 }}>
+            <Group transform={[
+              { translateX: transform.translateX },
+              { translateY: transform.translateY },
+              { scale: transform.scale },
+            ]}
+            origin={{ x: 0, y: 0 }}>
               {paths?.filter(Boolean).map((p: DrawPathInfo, index: number) => (
                 <CanvasDrawItem key={id + `path-${index}`} pathInfo={p} transform={transform} />
               ))}

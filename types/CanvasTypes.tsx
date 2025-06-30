@@ -1,5 +1,6 @@
 import { Skia } from "@shopify/react-native-skia";
-
+import { GlobalCanvasStates as MainGlobalCanvasStates} from "./MainCanvasType";
+import { UndoRedoStack } from "@/hooks/useUndoRedo";
 // 通用 StateUpdater 泛型，用于表示setState的setter函数
 export type StateUpdater<T> = (updater: T | ((prev: T) => T)) => void;
 
@@ -68,6 +69,7 @@ export interface CanvasToolbarProps {
 export interface CustomCanvasProps {
   // 画布唯一标识符，用于父亲区分各个画布与画布中的路径
   id: string;
+  parentId: string; // 父画布的唯一标识符，用于嵌入式画布
   // 画布位置
   x?: number;
   y?: number;
@@ -95,6 +97,8 @@ export interface CustomCanvasProps {
   globalData?: GlobalCanvasStates;
   fullscreen?: StateWithSetter<boolean>; // 新增：是否全屏子画布
   canvasTransform?: StateWithSetter<TransformType>; // 新增：画布内容变换状态
+  globalState: StateWithSetter<MainGlobalCanvasStates>; // 新增：画布数据状态
+  globalUndoRedo?: UndoRedoStack<MainGlobalCanvasStates>; // 新增：撤销重做栈
 };
 export type CanvasContext = CustomCanvasProps & {
   contentsTransform: StateWithSetter<TransformType>;
@@ -115,6 +119,7 @@ export type DrawPathInfo = {
 
 export type EmbeddedCanvasData = {
   id: string;
+  parentId: string; // 父画布的唯一标识符
   x: number;
   y: number;
   width: number;
@@ -188,13 +193,14 @@ export type GlobalCanvasStates = {
   paths?: StateWithSetter<DrawPathInfo[]>;
   canvases?: StateWithSetter<EmbeddedCanvasData[]>;
 };
+// export type GlobalCanvasStates = MainGlobalCanvasStates;
 
 export type ModuleInsertOptionsType = Partial<{
   id: string; // 父亲画布的唯一标识符
+  parentId: string; // 父亲画布的唯一标识符
   width: number;
   height: number;
   fontSize: number;
   duration: number;
   title: string;
-  backgroundColor: string;
 }>;
