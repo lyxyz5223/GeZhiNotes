@@ -1,5 +1,5 @@
 import { CustomCanvasProps, StateUpdater, TextBlockInfo, TransformType } from "@/types/CanvasTypes";
-import React, { useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
@@ -49,39 +49,55 @@ function CanvasTextItem({
     };
   }, [contentsTransform]);
 
+  const tapGesture = useMemo(() =>
+    Gesture.Tap()
+      .runOnJS(true)
+      .onBegin(() => {
+      })
+      .onEnd(() => {
+      })
+    ,[]);
   // 拖动手势
-  const panGesture = Gesture.Pan()
-    .onBegin(() => {
-      runOnJS(setActive)({ id: textBlock.id, mode: 'drag' });
-    })
-    .onUpdate(e => {
-      const scale = contentsTransform?.scale ?? 1;
-      translateX.value = textBlock.x + e.translationX / scale;
-      translateY.value = textBlock.y + e.translationY / scale;
-    })
-    .onEnd(() => {
-      runOnJS(setActive)({ id: null, mode: null });
-      if (setTextsInGlobal) {
-        let newArr: TextBlockInfo[] = textsInGlobal.map((item: TextBlockInfo) =>
-          item.id === textBlock.id
-            ? { ...item, x: Number(translateX.value), y: Number(translateY.value) }
-            : item
-        );
-        runOnJS(setTextsInGlobal)(newArr);
-      }
-    });
+  const panGesture = useMemo(() =>
+    Gesture.Pan()
+      .onBegin(() => {
+        runOnJS(setActive)({ id: textBlock.id, mode: 'drag' });
+      })
+      .onUpdate(e => {
+        const scale = contentsTransform?.scale ?? 1;
+        translateX.value = textBlock.x + e.translationX / scale;
+        translateY.value = textBlock.y + e.translationY / scale;
+      })
+      .onEnd(() => {
+        runOnJS(setActive)({ id: null, mode: null });
+        if (setTextsInGlobal) {
+          let newArr: TextBlockInfo[] = textsInGlobal.map((item: TextBlockInfo) =>
+            item.id === textBlock.id
+              ? { ...item, x: Number(translateX.value), y: Number(translateY.value) }
+              : item
+          );
+          runOnJS(setTextsInGlobal)(newArr);
+        }
+      })
+    ,[setTextsInGlobal, textBlock.id, textBlock.x, textBlock.y, contentsTransform, translateX, translateY, setActive, textsInGlobal]);
 
+  const gesture = useMemo(() => {
+    return Gesture.Simultaneous(
+      tapGesture,
+      panGesture
+    );
+  }, [tapGesture, panGesture]);
   // 删除文本
-  const handleDeleteText = () => {
+  const handleDeleteText = useCallback(() => {
     if (!setTextsInGlobal) return;
     Alert.alert('删除文本', '确定要删除该文本吗？', [
       { text: '取消', style: 'cancel' },
       { text: '删除', style: 'destructive', onPress: () => setTextsInGlobal((prev: TextBlockInfo[]) => (prev || []).filter(i => i.id !== textBlock.id)) }
     ]);
-  };
+  }, [setTextsInGlobal, textBlock.id]);
 
   return (
-    <GestureDetector gesture={panGesture}>
+    <GestureDetector gesture={gesture}>
       <Animated.View style={[styles.textWrap, animatedStyle, active.id === textBlock.id && active.mode === 'drag' ? styles.active : null]}>
         <Text style={styles.text}>{textBlock.text}</Text>
         <TouchableOpacity style={styles.delBtn} onPress={handleDeleteText}>
@@ -94,8 +110,8 @@ function CanvasTextItem({
 
 // 文本模块主组件
 function CanvasTextModule({ props, extraParams }: { props: CustomCanvasProps; extraParams: any }) {
-  const textsInGlobal: TextBlockInfo[] = props.globalData?.texts || [];
-  const setTextsInGlobal: StateUpdater<TextBlockInfo[]> | undefined = props.globalData?.setTexts;
+  const textsInGlobal: TextBlockInfo[] = props.globalData?.texts?.value || [];
+  const setTextsInGlobal: StateUpdater<TextBlockInfo[]> | undefined = props.globalData?.texts?.setValue;
   const [active, setActive] = useState<{ id: string | null; mode: 'drag' | 'resize' | null; corner?: 'br'|'tr'|'bl'|'tl' }>({ id: null, mode: null });
   // 画布 transform 透传
   const { canvasContentsTransform } = extraParams.contentsTransform || { canvasContentsTransform: { scale: 1, translateX: 0, translateY: 0 } };

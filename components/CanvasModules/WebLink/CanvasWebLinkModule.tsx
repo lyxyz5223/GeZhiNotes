@@ -4,8 +4,8 @@ import { Linking, Text, TouchableOpacity } from "react-native";
 
 function CanvasWebLinkModule({ props, extraParams }: { props: CustomCanvasProps; extraParams: any }) {
   // 统一使用 globalData
-  const webLinksInGlobal: WebLinkBlockInfo[] = props.globalData?.webLinks || [];
-  const setWebLinksInGlobal: StateUpdater<WebLinkBlockInfo[]> | undefined = props.globalData?.setWebLinks;
+  const webLinksInGlobal: WebLinkBlockInfo[] = props.globalData?.webLinks?.value || [];
+  const setWebLinksInGlobal: StateUpdater<WebLinkBlockInfo[]> | undefined = props.globalData?.webLinks?.setValue;
   return (
     <>
       {webLinksInGlobal.map((link: WebLinkBlockInfo, idx: number) => (

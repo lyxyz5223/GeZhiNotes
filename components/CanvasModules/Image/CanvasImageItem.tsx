@@ -34,7 +34,8 @@ const CanvasImageItem = ({ img, imagesInGlobal, setImagesInGlobal, active, setAc
     height: height.value,
   }), []);
 
-
+  const tapGesture = Gesture.Tap()
+  
   // 拖动手势
   const panGesture = Gesture.Pan()
     .onBegin(() => {
@@ -100,6 +101,10 @@ const CanvasImageItem = ({ img, imagesInGlobal, setImagesInGlobal, active, setAc
         }
       });
 
+  const gesture = Gesture.Simultaneous(
+    tapGesture,
+    panGesture
+  );
   // 删除图片
   const handleDeleteImage = () => {
     if (!setImagesInGlobal) return;
@@ -110,7 +115,7 @@ const CanvasImageItem = ({ img, imagesInGlobal, setImagesInGlobal, active, setAc
   };
 
   return (
-    <GestureDetector gesture={panGesture}>
+    <GestureDetector gesture={gesture}>
       <Animated.View style={[styles.imgWrap, animatedStyle, active.id === img.id && (active.mode === 'drag' || active.mode === 'resize') ? styles.active : null]}>
         <Image
           source={{ uri: img.uri }}

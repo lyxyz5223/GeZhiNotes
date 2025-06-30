@@ -1,100 +1,19 @@
 import { INIT_SIZE as CANVAS_INIT_SIZE } from "@/constants/CanvasConstants";
 import { allThemes } from "@/constants/CanvasTheme";
+import { initialGlobalStates, useGlobalStatesWithSetters } from "@/hooks/useGlobalStatesWithSetters";
 import { useUndoRedo } from "@/hooks/useUndoRedo";
-import { AudioBlockInfo, CanvasMode, CanvasType, DrawPathInfo, EmbeddedCanvasData, ImageBlockInfo, LinkBlockInfo, TextBlockInfo, VideoBlockInfo, WebLinkBlockInfo } from "@/types/CanvasTypes";
+import { CanvasMode, CanvasType, DrawPathInfo, EmbeddedCanvasData } from "@/types/CanvasTypes";
+import { GlobalCanvasStates, GlobalPathsType, } from "@/types/MainCanvasType";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemeProvider } from "@react-navigation/native";
 import { Skia } from '@shopify/react-native-skia';
-import React, { useCallback, useId, useState } from "react";
-import { Dimensions, StyleSheet, TouchableOpacity, View } from "react-native";
+import React, { useCallback, useEffect, useId, useState } from "react";
+import { Dimensions, StyleSheet, View } from "react-native";
 import CanvasToolbar from "./CanvasToolbar";
 import CustomCanvas from "./CustomCanvas";
 import ThemeSelectorModal from "./ThemeSelectorModal";
-import ThemedText from "./ThemedText";
 
 
-type GlobalPathsType = { [id: string]: DrawPathInfo[] };
-type GlobalTextsType = { [id: string]: TextBlockInfo[] };
-type GlobalImagesType = { [id: string]: ImageBlockInfo[] };
-type GlobalAudiosType = { [id: string]: AudioBlockInfo[] };
-type GlobalCanvasLinksType = { [id: string]: LinkBlockInfo[] };
-type GlobalVideosType = { [id: string]: VideoBlockInfo[] };
-type GlobalWebLinksType = { [id: string]: WebLinkBlockInfo[] };
-
-// 全局画布数据结构，包含所有类型
-interface GlobalCanvasState {
-  paths: GlobalPathsType;
-  texts: GlobalTextsType;
-  images: GlobalImagesType;
-  audios: GlobalAudiosType;
-  videos: GlobalVideosType;
-  links: GlobalCanvasLinksType;
-  webLinks: GlobalWebLinksType;
-}
-
-// 为画布的每个属性生成更新函数
-// 用法: makePerCanvasStateSetter('paths', setGlobalState)(id)(paths);
-function makePerCanvasStateSetter<K extends keyof GlobalCanvasState>(
-  key: K,
-  setGlobalState: React.Dispatch<React.SetStateAction<GlobalCanvasState>>
-) {
-  type ItemType = GlobalCanvasState[K][string];
-  return (id: string) => (updater: ItemType | ((previous: ItemType) => ItemType)) => {
-    setGlobalState(prevState => {
-      const prevValue = prevState[key][id] as ItemType ?? ([] as unknown as ItemType);
-      const newValue = typeof updater === 'function' ? (updater as (prev: ItemType) => ItemType)(prevValue) : updater;
-      return {
-        ...prevState,
-        [key]: {
-          ...prevState[key],
-          [id]: newValue,
-        },
-      };
-    });
-  };
-}
-// 动态生成所有 setter
-// 用法: createAllGlobalStateSetters(setGlobalState)(id).setPaths(paths);
-// 返回一个包含所有 setter 方法(如 setPaths、setTexts 等)作为返回值的参数为id的函数对象
-const createAllGlobalStateSetters = (
-  setGlobalState: React.Dispatch<React.SetStateAction<GlobalCanvasState>>,
-  callback: (id: string, setterFunctionName: string, newValue: any, newGlobalData: GlobalCanvasState) => void = () => {}// 回调函数，当每个 setter 被调用时执行（可选，默认为空函数）
-) =>
-  (id: string) => {
-  const keys = Object.keys(initialGlobalState) as (keyof GlobalCanvasState)[];
-  const setters: any = {};
-  keys.forEach(key => {
-    // setter 名如 setPaths、setTexts
-    const setterName = 'set' + key.charAt(0).toUpperCase() + key.slice(1);
-    setters[setterName] = (newValue: any) => {
-      setGlobalState(prevState => {
-        const prevValue = prevState[key][id] as any ?? [];
-        const updatedValue = typeof newValue === 'function' ? newValue(prevValue) : newValue;
-        const newState = {
-          ...prevState,
-          [key]: {
-            ...prevState[key],
-            [id]: updatedValue,
-          }
-        };
-        callback(id, setterName, updatedValue, newState); // 这里拿到 set 后的最新 globalState
-        return newState;
-      });
-    };
-  });
-  return setters;
-};
-
-
-const initialGlobalState: GlobalCanvasState = {
-  paths: {},
-  texts: {},
-  images: {},
-  audios: {},
-  videos: {},
-  links: {},
-  webLinks: {},
-};
 
 export default function MainCanvas() {
   // 画布列表
@@ -120,17 +39,34 @@ export default function MainCanvas() {
   const [mode, setMode] = useState(CanvasMode.Draw);
 
   // 用 useUndoRedo 管理全局画布数据（所有类型）撤销重做
-  const undoRedo = useUndoRedo<GlobalCanvasState>();
-  const [globalState, setGlobalState] = useState<GlobalCanvasState>(initialGlobalState);
+  const undoRedo = useUndoRedo<GlobalCanvasStates>();
+  const [globalState, setGlobalState] = useState<GlobalCanvasStates>(initialGlobalStates);
 
-  const globalDataSetters = createAllGlobalStateSetters(
+  const handleGlobalStateChange = useCallback((id: string, stateName: string, newValue: any, newGlobalData: GlobalCanvasStates) => {
+      undoRedo.push(newGlobalData);// 将操作后的新全局记录进入撤销栈
+  }, [undoRedo]);
+  useEffect(() => {
+    console.log('[undoRedo] 发生变化', undoRedo);
+  }, [undoRedo]);
+  // 用 useMemo 缓存 globalDataSetters，避免每次渲染都新建 setter 函数
+  const globalDataSetters = useGlobalStatesWithSetters(
+    globalState,
     setGlobalState,
-    (id, setterName, newValue, newGlobalData) => {
-      // 将操作记录到撤销重做栈
-      undoRedo.push(newGlobalData);
-    }
+    handleGlobalStateChange
   );
-  
+  useEffect(() => {
+    console.log('[globalDataSetters] 发生变化');
+  }, [globalDataSetters]);
+
+  const firstCanvasId = canvases[0]?.id;
+  // 用 useMemo 缓存 dataSetters，避免每次渲染都新建 setter 对象
+  const dataSetters = React.useMemo(
+    () => globalDataSetters(firstCanvasId),
+    [globalDataSetters, firstCanvasId]
+  );
+
+  // 用 useMemo 缓存 globalData，避免每次渲染都新建对象
+  const memoizedGlobalData = React.useMemo(() => ({ ...dataSetters }), [dataSetters]);
   // 主题选择弹窗
   const [themeModalVisible, setThemeModalVisible] = useState(false);
   const [themeIndex, setThemeIndex] = useState(0);
@@ -178,7 +114,7 @@ export default function MainCanvas() {
   // 撤销
   const handleUndo = () => {
     const last = undoRedo.undo();
-    setGlobalState(prev => last ? last : initialGlobalState);
+    setGlobalState(prev => last ? last : initialGlobalStates);
   };
   // 重做
   const handleRedo = () => {
@@ -218,7 +154,7 @@ export default function MainCanvas() {
               : (arr as DrawPathInfo[]);
           });
           setGlobalState({
-            ...initialGlobalState,
+            ...initialGlobalStates,
             ...parsed.globalState,
             paths: fixedPaths,
           });
@@ -261,6 +197,10 @@ export default function MainCanvas() {
   //   handleLoad();
   // }, []);
 
+  // memo化 mode 和 fullscreen，避免对象引用频繁变化
+  const modeObj = React.useMemo(() => ({ value: mode, setValue: setMode }), [mode, setMode]);
+  const fullscreenObj = React.useMemo(() => ({ value: true, setValue: () => {} }), []);
+
 
   return (
     <ThemeProvider value={currentTheme}>
@@ -278,13 +218,13 @@ export default function MainCanvas() {
           onClose={() => setThemeModalVisible(false)}
         />
         {/* 浮动加号按钮 */}
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={styles.fab}
           onPress={addCanvas}
           activeOpacity={0.8}
         >
           <ThemedText style={styles.fabIcon}>＋</ThemedText>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
         {/* 全局工具栏 */}
         <CanvasToolbar
           color={color}
@@ -326,25 +266,15 @@ export default function MainCanvas() {
               canvasBg={currentTheme.colors.background} // 用主题背景色
               color={color}
               size={size}
-              mode={mode}
+              mode={modeObj}
               moveable={false}
               resizeable={false}
-              globalData={
-                {
-                  paths: globalState.paths[canvases[0].id] || [],
-                  texts: globalState.texts[canvases[0].id] || [],
-                  images: globalState.images[canvases[0].id] || [],
-                  audios: globalState.audios[canvases[0].id] || [],
-                  videos: globalState.videos[canvases[0].id] || [],
-                  links: globalState.links[canvases[0].id] || [],
-                  webLinks: globalState.webLinks[canvases[0].id] || [],
-                  ...globalDataSetters(canvases[0].id)
-                }
-              }
+              fullscreen={fullscreenObj}
+              globalData={memoizedGlobalData}
             />
           )}
           {/* 渲染其他画布 */}
-          {canvases.map((c, idx) => idx === 0 ? null : (
+          {/* {canvases.map((c, idx) => idx === 0 ? null : (
             <CustomCanvas
               id={c.id}
               key={c.id}
@@ -358,21 +288,17 @@ export default function MainCanvas() {
               canvasBg={currentTheme.colors.background} // 用主题背景色
               color={color}
               size={size}
-              mode={mode}
+              mode={{
+                value: mode,
+                setValue: setMode
+              }} // 子画布不需要 mode 状态
               globalData={
                 {
-                  paths: globalState.paths[c.id] || [],
-                  texts: globalState.texts[c.id] || [],
-                  images: globalState.images[c.id] || [],
-                  audios: globalState.audios[c.id] || [],
-                  videos: globalState.videos[c.id] || [],
-                  links: globalState.links[c.id] || [],
-                  webLinks: globalState.webLinks[c.id] || [],
                   ...globalDataSetters(c.id)
                 }
               }
             />
-          ))}
+          ))} */}
         </View>
       </View>
     </ThemeProvider>
