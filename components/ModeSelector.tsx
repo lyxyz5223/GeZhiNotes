@@ -51,6 +51,11 @@ const modeList: ModeButtonProps[] = [
     icon: "🪢",
     accessibilityLabel: "切换为节点连接模式"
   },
+  {
+    mode: CanvasMode.Canvas,
+    icon: "🎨",
+    accessibilityLabel: "切换为嵌入式画布模式"
+  }
 ];
 
 

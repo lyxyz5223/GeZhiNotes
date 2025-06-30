@@ -4,8 +4,8 @@ import { Text, View } from "react-native";
 
 function CanvasVideoModule({ props, extraParams }: { props: CustomCanvasProps; extraParams: any }) {
   // 统一使用 globalData
-  const videosInGlobal: VideoBlockInfo[] = props.globalData?.videos || [];
-  const setVideosInGlobal: StateUpdater<VideoBlockInfo[]> | undefined = props.globalData?.setVideos;
+  const videosInGlobal: VideoBlockInfo[] = props.globalData?.videos?.value || [];
+  const setVideosInGlobal: StateUpdater<VideoBlockInfo[]> | undefined = props.globalData?.videos?.setValue;
   return (
     <>
       {videosInGlobal.map((video: VideoBlockInfo, idx: number) => (

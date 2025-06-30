@@ -6,8 +6,8 @@ import React, { useCallback, useState } from "react";
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 const CanvasAudioModule: React.FC<{ props: CustomCanvasProps; extraParams: any }> = ({ props, extraParams }) => {
-  const audiosInGlobal: AudioBlockInfo[] = props.globalData?.audios || [];
-  const setAudiosInGlobal: StateUpdater<AudioBlockInfo[]> | undefined = props.globalData?.setAudios;
+  const audiosInGlobal: AudioBlockInfo[] = props.globalData?.audios?.value || [];
+  const setAudiosInGlobal: StateUpdater<AudioBlockInfo[]> | undefined = props.globalData?.audios?.setValue;
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [soundObj, setSoundObj] = useState<Audio.Sound | null>(null);
   const [isLoading, setIsLoading] = useState(false);

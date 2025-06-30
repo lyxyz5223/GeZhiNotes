@@ -4,8 +4,8 @@ import { View } from "react-native";
 import CanvasImageItem from "./CanvasImageItem";
 
 function CanvasImageModule({ props, extraParams }: { props: CustomCanvasProps; extraParams: any }) {
-  const imagesInGlobal: ImageBlockInfo[] = props.globalData?.images || [];
-  const setImagesInGlobal: StateUpdater<ImageBlockInfo[]> | undefined = props.globalData?.setImages;
+  const imagesInGlobal: ImageBlockInfo[] = props.globalData?.images?.value || [];
+  const setImagesInGlobal: StateUpdater<ImageBlockInfo[]> | undefined = props.globalData?.images?.setValue;
   // 当前操作的图片id和模式（drag/resize/null）
   const [active, setActive] = useState<{ id: string | null; mode: 'drag' | 'resize' | null; corner?: 'br'|'tr'|'bl'|'tl' }>({ id: null, mode: null });
 
@@ -13,7 +13,7 @@ function CanvasImageModule({ props, extraParams }: { props: CustomCanvasProps; e
   const { canvasContentsTransform } = extraParams.contentsTransform || { canvasContentsTransform: { scale: 1, translateX: 0, translateY: 0 } };
 
   const key = useId();
-  
+
   return (
     <View style={{ flex: 1 }}>
       {imagesInGlobal.map((img: ImageBlockInfo) => (
