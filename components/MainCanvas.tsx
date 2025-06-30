@@ -31,6 +31,7 @@ export default function MainCanvas() {
       },
     ]
   );
+
   // 工具栏状态
   const [color, setColor] = useState("#007aff");
   const [size, setSize] = useState(4);
@@ -40,7 +41,15 @@ export default function MainCanvas() {
 
   // 用 useUndoRedo 管理全局画布数据（所有类型）撤销重做
   const undoRedo = useUndoRedo<GlobalCanvasStates>();
-  const [globalState, setGlobalState] = useState<GlobalCanvasStates>(initialGlobalStates);
+  const [globalState, setGlobalState] = useState<GlobalCanvasStates>(
+    {
+      ...initialGlobalStates,
+      canvases: {
+        [canvases[0].id]: [
+          { ...canvases[0] }
+        ]
+      }
+    });
   const memoizedGlobalState = React.useMemo(() => {
     return {
       value: globalState,

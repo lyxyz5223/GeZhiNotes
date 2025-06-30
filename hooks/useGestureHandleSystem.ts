@@ -11,7 +11,7 @@ const useGestureHandleSystem = (canvasContext: CanvasContext, childrenGestures: 
   const doubleTapGesture = useMemo(() => {
     const canvasType = canvasContext.canvasType;
     const setIsFullscreen = canvasContext.fullscreen?.setValue || (() => {});
-    return Gesture.Tap()
+    return Gesture.Simultaneous(Gesture.Tap()
       .numberOfTaps(2)
       .runOnJS(true)
       .onEnd((event: any) => {
@@ -24,19 +24,22 @@ const useGestureHandleSystem = (canvasContext: CanvasContext, childrenGestures: 
           }
           return prev; // 主画布不处理
         });
-      });
+      }), Gesture.Tap());
   }, [canvasContext.canvasType, canvasContext.fullscreen?.setValue]);
   const handleAddModule = useAddModuleGestureHandler(canvasContext).requireExternalGestureToFail();
   // console.log('handleAddModule', handleAddModule);
   // 用 useMemo 缓存 Gesture 对象
   return useMemo(() => {
     if (canvasContext.fullscreen?.value === true) {
+      if (canvasContext.canvasType === CanvasType.Child) {
+        return Gesture.Simultaneous(pinchContentsGestureHandler);
+      }
       return Gesture.Simultaneous(pinchContentsGestureHandler, handleAddModule);
     }
     else {
       return Gesture.Simultaneous(doubleTapGesture);
     }
-  }, [handleAddModule, pinchContentsGestureHandler, doubleTapGesture, canvasContext.fullscreen]);
+  }, [handleAddModule, pinchContentsGestureHandler, doubleTapGesture, canvasContext.fullscreen, canvasContext.canvasType]);
 };
 
 export default useGestureHandleSystem;

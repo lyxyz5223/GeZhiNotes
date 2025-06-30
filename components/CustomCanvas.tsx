@@ -114,10 +114,10 @@ const CustomCanvas: React.FC<CustomCanvasProps> = (props) => {
     borderTouchWidth
   };
   // 传递给子模块的 props
-  const childProps: CustomCanvasProps = {
+  const childProps: CustomCanvasProps = useMemo(() => ({
     ...props,
     globalData: memoizedGlobalData,
-  };
+  }), [props, memoizedGlobalData]);
 
   // 所有可被注入的参数池
   const allParams: Record<string, any> = React.useMemo(() => ({
@@ -248,7 +248,7 @@ const CustomCanvas: React.FC<CustomCanvasProps> = (props) => {
     setValue: setChildFullscreenState
   }), [childFullscreenState]);
   const modeObj = useMemo(() => ({ value: mode?.value || CanvasMode.Draw, setValue: () => { } }), [mode]);
-
+  console.log('CustomCanvas 渲染', props.globalData?.canvases?.value?.length, '个画布', id, '类型:', canvasType, '全屏状态:', fullscreen.value, '子画布全屏状态:', childFullscreenState);
   return (
     <GestureDetector gesture={gesture}>
       <View
@@ -289,8 +289,8 @@ const CustomCanvas: React.FC<CustomCanvasProps> = (props) => {
         )}
         {canvasType === CanvasType.Main && (
           props.globalData?.canvases?.value?.map(
-            (canvas) => {
-              return <CustomCanvas
+            (canvas, idx) => (idx === 0 ? null : // 跳过主画布本身
+              <CustomCanvas
                 id={canvas.id}
                 parentId={canvas.parentId} // 设置父画布 ID
                 key={canvas.id} // 确保唯一性
@@ -319,7 +319,7 @@ const CustomCanvas: React.FC<CustomCanvasProps> = (props) => {
                   ],
                 }}
               />
-            })
+            ))
         )}
         {/* 只有非全屏子画布允许resize和move，且无手柄，仅边框可拖动 */}
         {resizeable && !fullscreen.value && (
