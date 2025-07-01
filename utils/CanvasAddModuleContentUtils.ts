@@ -1,13 +1,17 @@
-import { AudioBlockInfo, TextBlockInfo, VideoBlockInfo, WebLinkBlockInfo } from '@/types/CanvasTypes';
+import { AudioBlockInfo, EmbeddedCanvasData, ModuleInsertOptionsType, TextBlockInfo, VideoBlockInfo, WebLinkBlockInfo } from '@/types/CanvasTypes';
 import { pickAndInsertImage } from './CanvasAddImageUtils';
+import { useId } from 'react';
+import { INIT_SIZE as CANVAS_INIT_SIZE } from '@/constants/CanvasConstants';
 // 插入行为实现函数
-export function insertImage(globalData: any, x: number, y: number, options?: { width?: number; height?: number }) {
-  if (globalData?.setImages) {
-    return pickAndInsertImage(globalData.setImages, x, y, options);
+export function insertImage(globalData: any, x: number, y: number, options?: ModuleInsertOptionsType) {
+  const setValue = globalData?.images.setValue;
+  if (setValue) {
+    return pickAndInsertImage(setValue, x, y, options);
   }
 }
-export function insertText(globalData: any, x: number, y: number, options?: { fontSize?: number }) {
-  if (globalData?.setTexts) {
+export function insertText(globalData: any, x: number, y: number, options?: ModuleInsertOptionsType) {
+  const setValue = globalData?.texts.setValue;
+  if (setValue) {
     const newText: TextBlockInfo = {
       id: Date.now().toString(),
       text: "新文本",
@@ -17,11 +21,12 @@ export function insertText(globalData: any, x: number, y: number, options?: { fo
       fontSize: options?.fontSize ?? 18,
       fontFamily: undefined,
     };
-    globalData.setTexts((prev: TextBlockInfo[] = []) => [...prev, newText]);
+    setValue((prev: TextBlockInfo[] = []) => [...prev, newText]);
   }
 }
-export function insertVideo(globalData: any, x: number, y: number, options?: { width?: number; height?: number }) {
-  if (globalData?.setVideos) {
+export function insertVideo(globalData: any, x: number, y: number, options?: ModuleInsertOptionsType) {
+  const setValue = globalData?.videos.setValue;
+  if (setValue) {
     const newVideo: VideoBlockInfo = {
       id: Date.now().toString(),
       uri: '',
@@ -30,23 +35,25 @@ export function insertVideo(globalData: any, x: number, y: number, options?: { w
       width: options?.width ?? 160,
       height: options?.height ?? 90,
     };
-    globalData.setVideos((prev: VideoBlockInfo[] = []) => [...prev, newVideo]);
+    setValue((prev: VideoBlockInfo[] = []) => [...prev, newVideo]);
   }
 }
-export function insertWebLink(globalData: any, x: number, y: number, options?: { title?: string }) {
-  if (globalData?.setWebLinks) {
+export function insertWebLink(globalData: any, x: number, y: number, options?: ModuleInsertOptionsType) {
+  const setValue = globalData?.webLinks.setValue;
+  if (setValue) {
     const newLink: WebLinkBlockInfo = {
       id: Date.now().toString(),
-      url: 'https://',
+      url: 'https://cn.bing.com/',
       x,
       y,
-      title: options?.title ?? '新链接',
+      title: options?.title ?? '必应搜索',
     };
-    globalData.setWebLinks((prev: WebLinkBlockInfo[] = []) => [...prev, newLink]);
+    setValue((prev: WebLinkBlockInfo[] = []) => [...prev, newLink]);
   }
 }
-export function insertAudio(globalData: any, x: number, y: number, options?: { duration?: number }) {
-  if (globalData?.setAudios) {
+export function insertAudio(globalData: any, x: number, y: number, options?: ModuleInsertOptionsType) {
+  const setValue = globalData?.audios.setValue;
+  if (setValue) {
     const newAudio: AudioBlockInfo = {
       id: Date.now().toString(),
       uri: '',
@@ -54,6 +61,22 @@ export function insertAudio(globalData: any, x: number, y: number, options?: { d
       y,
       duration: options?.duration,
     };
-    globalData.setAudios((prev: AudioBlockInfo[] = []) => [...prev, newAudio]);
+    setValue((prev: AudioBlockInfo[] = []) => [...prev, newAudio]);
+  }
+}
+
+export function insertCanvas(globalData: any, x: number, y: number, options?: ModuleInsertOptionsType) {
+  const setValue = globalData?.canvases.setValue;
+  const i = Date.now().toString();
+  if (setValue) {
+    const newCanvas: EmbeddedCanvasData = {
+      id: options?.id ? options.id + '-' + i : i, // 生成唯一id
+      parentId: options?.parentId ?? '', // 父画布ID
+      x: x - CANVAS_INIT_SIZE / 2,
+      y: y - CANVAS_INIT_SIZE / 2,
+      width: CANVAS_INIT_SIZE,
+      height: CANVAS_INIT_SIZE,
+    };
+    setValue((prev: any[] = []) => [...prev, newCanvas]);
   }
 }

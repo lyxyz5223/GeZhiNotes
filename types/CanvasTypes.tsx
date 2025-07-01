@@ -1,7 +1,13 @@
 import { Skia } from "@shopify/react-native-skia";
-
+import { GlobalCanvasStates as MainGlobalCanvasStates} from "./MainCanvasType";
+import { UndoRedoStack } from "@/hooks/useUndoRedo";
 // 通用 StateUpdater 泛型，用于表示setState的setter函数
 export type StateUpdater<T> = (updater: T | ((prev: T) => T)) => void;
+
+export type StateWithSetter<T> = {
+  value: T;
+  setValue?: StateUpdater<T>;
+};
 
 export enum CanvasMode {
   Hand = 'hand',
@@ -13,6 +19,8 @@ export enum CanvasMode {
   WebLink = 'weblink',
   Audio = 'audio', // 音频模式
   Link = 'link',
+  Canvas = 'canvas', // 嵌入式画布模式
+  EmbeddedCanvas = Canvas, // 兼容
 }
 
 export enum CanvasType {
@@ -61,6 +69,7 @@ export interface CanvasToolbarProps {
 export interface CustomCanvasProps {
   // 画布唯一标识符，用于父亲区分各个画布与画布中的路径
   id: string;
+  parentId: string; // 父画布的唯一标识符，用于嵌入式画布
   // 画布位置
   x?: number;
   y?: number;
@@ -80,14 +89,22 @@ export interface CustomCanvasProps {
   color?: string;
   // 画笔大小
   size?: number;
-  mode?: CanvasMode; // 绘制模式，默认为Draw
+  mode?: StateWithSetter<CanvasMode>; // 绘制模式，默认为Draw
   moveable?: boolean; // 是否允许移动画布
   resizeable?: boolean; // 是否允许缩放画布
   borderRadius?: number; // 新增：允许自定义圆角，默认圆形
   // 全局数据统一传递
-  globalData?: GlobalCanvasState;
-  onExitFullscreen?: () => void; // 新增：全屏子画布退出全屏回调
-  onEnterFullscreen?: () => void; // 新增：全屏子画布进入全屏回调
+  globalData?: GlobalCanvasStates;
+  fullscreen?: StateWithSetter<boolean>; // 新增：是否全屏子画布
+  canvasTransform?: StateWithSetter<TransformType>; // 新增：画布内容变换状态
+  globalState: StateWithSetter<MainGlobalCanvasStates>; // 新增：画布数据状态
+  globalUndoRedo?: UndoRedoStack<MainGlobalCanvasStates>; // 新增：撤销重做栈
+};
+export type CanvasContext = CustomCanvasProps & {
+  contentsTransform: StateWithSetter<TransformType>;
+  canvasViewRef: React.RefObject<any>;
+  activeResizing: StateWithSetter<boolean>; // 是否正在缩放
+  borderTouchWidth: number; // 边框触摸宽度
 };
 
 export type DrawPathInfo = {
@@ -102,6 +119,7 @@ export type DrawPathInfo = {
 
 export type EmbeddedCanvasData = {
   id: string;
+  parentId: string; // 父画布的唯一标识符
   x: number;
   y: number;
   width: number;
@@ -165,20 +183,24 @@ export type WebLinkBlockInfo = {
 
 
 // 全局画布数据结构，包含所有类型的全局数据（每个字段为数组，直接传递给画布）
-export type GlobalCanvasState = {
-  images?: ImageBlockInfo[];
-  setImages?: StateUpdater<ImageBlockInfo[]>;
-  audios?: AudioBlockInfo[];
-  setAudios?: StateUpdater<AudioBlockInfo[]>;
-  videos?: VideoBlockInfo[];
-  setVideos?: StateUpdater<VideoBlockInfo[]>;
-  webLinks?: WebLinkBlockInfo[];
-  setWebLinks?: StateUpdater<WebLinkBlockInfo[]>;
-  texts?: TextBlockInfo[];
-  setTexts?: StateUpdater<TextBlockInfo[]>;
-  links?: LinkBlockInfo[];
-  setLinks?: StateUpdater<LinkBlockInfo[]>;
-  paths?: DrawPathInfo[];
-  setPaths?: StateUpdater<DrawPathInfo[]>;
+export type GlobalCanvasStates = {
+  images?: StateWithSetter<ImageBlockInfo[]>;
+  audios?: StateWithSetter<AudioBlockInfo[]>;
+  videos?: StateWithSetter<VideoBlockInfo[]>;
+  webLinks?: StateWithSetter<WebLinkBlockInfo[]>;
+  texts?: StateWithSetter<TextBlockInfo[]>;
+  links?: StateWithSetter<LinkBlockInfo[]>;
+  paths?: StateWithSetter<DrawPathInfo[]>;
+  canvases?: StateWithSetter<EmbeddedCanvasData[]>;
 };
+// export type GlobalCanvasStates = MainGlobalCanvasStates;
 
+export type ModuleInsertOptionsType = Partial<{
+  id: string; // 父亲画布的唯一标识符
+  parentId: string; // 父亲画布的唯一标识符
+  width: number;
+  height: number;
+  fontSize: number;
+  duration: number;
+  title: string;
+}>;

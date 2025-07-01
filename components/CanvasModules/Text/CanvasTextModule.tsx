@@ -1,5 +1,5 @@
 import { CustomCanvasProps, StateUpdater, TextBlockInfo, TransformType } from "@/types/CanvasTypes";
-import React, { ForwardedRef, useRef, useState } from "react";
+import React, { ForwardedRef, useCallback, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
@@ -12,7 +12,7 @@ const HANDLE_TOUCH_OFFSET = -HANDLE_TOUCH_SIZE / 2;
 // 单个文本块组件
 interface CanvasTextItemProps {
   textBlock: TextBlockInfo;
-  textsInGlobal: TextBlockInfo[];
+  textsInGlobal: TextBlockInfo[];A
   setTextsInGlobal?: StateUpdater<TextBlockInfo[]>;
   active: { id: string | null; mode: 'drag' | 'resize' | null; corner?: 'br'|'tr'|'bl'|'tl' };
   setActive: React.Dispatch<React.SetStateAction<{ id: string | null; mode: 'drag' | 'resize' | null; corner?: 'br'|'tr'|'bl'|'tl' }>>;
@@ -73,31 +73,39 @@ const CanvasTextItem = React.forwardRef(function CanvasTextItem(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditing, textBlock.id]);
 
+  const tapGesture = useMemo(() =>
+    Gesture.Tap()
+      .runOnJS(true)
+      .onBegin(() => {
+      })
+      .onEnd(() => {
+      })
+    ,[]);
   // 拖动手势
-  const panGesture = Gesture.Pan()
-    .onBegin(() => {
-      runOnJS(setActive)({ id: textBlock.id, mode: 'drag' });
-    })
-    .onUpdate(e => {
-      const scale = contentsTransform?.scale ?? 1;
-      translateX.value = textBlock.x + e.translationX / scale;
-      translateY.value = textBlock.y + e.translationY / scale;
-    })
-    .onEnd(() => {
-      runOnJS(setActive)({ id: null, mode: null });
-      if (setTextsInGlobal) {
-        let newArr: TextBlockInfo[] = textsInGlobal.map((item: TextBlockInfo) =>
-          item.id === textBlock.id
-            ? { ...item, x: Number(translateX.value), y: Number(translateY.value) }
-            : item
-        );
-        runOnJS(setTextsInGlobal)(newArr);
-      }
-    });
+  const panGesture = useMemo(() =>
+    Gesture.Pan()
+      .onBegin(() => {
+        runOnJS(setActive)({ id: textBlock.id, mode: 'drag' });
+      })
+      .onUpdate(e => {
+        const scale = contentsTransform?.scale ?? 1;
+        translateX.value = textBlock.x + e.translationX / scale;
+        translateY.value = textBlock.y + e.translationY / scale;
+      })
+      .onEnd(() => {
+        runOnJS(setActive)({ id: null, mode: null });
+        if (setTextsInGlobal) {
+          let newArr: TextBlockInfo[] = textsInGlobal.map((item: TextBlockInfo) =>
+            item.id === textBlock.id
+              ? { ...item, x: Number(translateX.value), y: Number(translateY.value) }
+              : item
+          );
+          runOnJS(setTextsInGlobal)(newArr);
+        }
+      })
+    ,[setTextsInGlobal, textBlock.id, textBlock.x, textBlock.y, contentsTransform, translateX, translateY, setActive, textsInGlobal]);
 
-  // 拦截 tap，防止冒泡到父控件，但不做处理
-  const tapGesture = Gesture.Tap().onStart(() => {});
-  // 双击手势，直接进入编辑并激活当前文本块（不再直接 focus）
+    // 双击手势，直接进入编辑并激活当前文本块（不再直接 focus）
   const doubleTapGesture = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
@@ -117,13 +125,13 @@ const CanvasTextItem = React.forwardRef(function CanvasTextItem(
   const composedGesture = Gesture.Simultaneous(panGesture, tapGesture, doubleTapGesture);
 
   // 删除文本
-  const handleDeleteText = () => {
+  const handleDeleteText = useCallback(() => {
     if (!setTextsInGlobal) return;
     Alert.alert('删除文本', '确定要删除该文本吗？', [
       { text: '取消', style: 'cancel' },
       { text: '删除', style: 'destructive', onPress: () => setTextsInGlobal((prev: TextBlockInfo[]) => (prev || []).filter(i => i.id !== textBlock.id)) }
     ]);
-  };
+  }, [setTextsInGlobal, textBlock.id]);
 
   const handleContentSizeChange = (e: any) => {
     const contentSize = e?.nativeEvent?.contentSize;
@@ -217,8 +225,8 @@ return (
 
 // 文本模块主组件
 function CanvasTextModule({ props, extraParams }: { props: CustomCanvasProps; extraParams: any }) {
-  const textsInGlobal: TextBlockInfo[] = props.globalData?.texts || [];
-  const setTextsInGlobal: StateUpdater<TextBlockInfo[]> | undefined = props.globalData?.setTexts;
+  const textsInGlobal: TextBlockInfo[] = props.globalData?.texts?.value || [];
+  const setTextsInGlobal: StateUpdater<TextBlockInfo[]> | undefined = props.globalData?.texts?.setValue;
   const [active, setActive] = useState<{ id: string | null; mode: 'drag' | 'resize' | null; corner?: 'br'|'tr'|'bl'|'tl' }>({ id: null, mode: null });
   const [editingId, setEditingId] = useState<string | null>(null);
   const editingItemRef = useRef<any>(null);

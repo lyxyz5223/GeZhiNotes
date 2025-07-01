@@ -1,0 +1,39 @@
+{
+  "MainCustomCanvas": 0,
+  "ChildCustomCanvas": 1,
+  "FullscreenChildCanvas": 99,
+  "CanvasToolbar": 100,
+  
+  "test-globalData": {
+    "setValue": [],
+    "value": [
+      {
+        "color": "#007aff",
+        "id": "canvas-:r7:-1751267603599-Path-1751267646434",
+        "isEraser": false,
+        "path": [],
+        "points": [],
+        "size": 4,
+        "timestamp": 1751267646434
+      },
+      {
+        "color": "#007aff",
+        "id": "canvas-:r7:-1751267603599-1751267647559-Path-1751267656235",
+        "isEraser": false,
+        "path": [],
+        "points": [],
+        "size": 4,
+        "timestamp": 1751267656235
+      },
+      {
+        "color": "#007aff",
+        "id": "canvas-:r7:-1751267603599-Path-1751267681090",
+        "isEraser": false,
+        "path": [],
+        "points": [],
+        "size": 4,
+        "timestamp": 1751267681090
+      }
+    ]
+  }
+}

@@ -36,7 +36,7 @@ const CanvasToolbar: React.FC<CanvasToolbarProps> = (props) => {
           left: Math.max(toolbarPos.x, toolbarHorizontalMargin),
           top: toolbarPos.y,
           opacity: toolbarDragging ? 0.85 : 1,
-          zIndex: 20,
+          zIndex: 100,
           height: 48,
           minHeight: 48,
           width: toolbarMaxWidth,
@@ -156,21 +156,6 @@ const CanvasToolbar: React.FC<CanvasToolbarProps> = (props) => {
         >
           <ThemedText style={{ fontSize: 18 }}>🧽</ThemedText>
         </TouchableOpacity>
-        {/* 字体选择（文本模式下显示） */}
-        {mode === CanvasMode.Text && (
-          <View style={{ marginLeft: 8 }}>
-            <ThemedText style={{ fontSize: 16 }}>A</ThemedText>
-            <ThemedTextInput
-              value={fontFamily}
-              onChangeText={setFontFamily}
-              placeholder="字体"
-              style={{
-                width: 60, height: 28, borderWidth: 1, borderColor: '#ccc', borderRadius: 6,
-                padding: 0, textAlign: 'center', fontSize: 14, marginLeft: 2
-              }}
-            />
-          </View>
-        )}
         {/* 撤销/恢复/保存/读取 图标按钮 */}
         <View style={{ flexDirection: 'row', marginLeft: 8 }}>
           <IconButton onPress={onUndo} icon={"↩️"} />
