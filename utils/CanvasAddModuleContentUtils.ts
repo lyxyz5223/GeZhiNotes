@@ -39,17 +39,17 @@ export function insertVideo(globalData: any, x: number, y: number, options?: Mod
   }
 }
 export function insertWebLink(globalData: any, x: number, y: number, options?: ModuleInsertOptionsType) {
-  const setValue = globalData?.webLinks.setValue;
-  if (setValue) {
-    const newLink: WebLinkBlockInfo = {
-      id: Date.now().toString(),
-      url: 'https://',
-      x,
-      y,
-      title: options?.title ?? '新链接',
-    };
-    setValue((prev: WebLinkBlockInfo[] = []) => [...prev, newLink]);
-  }
+  // const setValue = globalData?.webLinks.setValue;
+  // if (setValue) {
+  //   const newLink: WebLinkBlockInfo = {
+  //     id: Date.now().toString(),
+  //     url: 'https://',
+  //     x,
+  //     y,
+  //     title: options?.title ?? '新链接',
+  //   };
+  //   setValue((prev: WebLinkBlockInfo[] = []) => [...prev, newLink]);
+  //}
 }
 export function insertAudio(globalData: any, x: number, y: number, options?: ModuleInsertOptionsType) {
   const setValue = globalData?.audios.setValue;

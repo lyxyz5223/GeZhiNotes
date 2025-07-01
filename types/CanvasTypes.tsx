@@ -169,6 +169,8 @@ export type VideoBlockInfo = {
 };
 
 export type WebLinkBlockInfo = {
+  width: number;
+  height: number;
   id: string;
   url: string;
   x: number;
