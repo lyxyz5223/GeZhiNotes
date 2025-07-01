@@ -70,9 +70,9 @@ const CustomCanvas: React.FC<CustomCanvasProps> = (props) => {
   const canvasViewRef = useRef<View>(null);
   // 画布内容缩放
   const [canvasContentsTransform, setCanvasContentsTransform] = useState<TransformType>({
-    scale: 1,
     translateX: 0,
     translateY: 0,
+    scale: 1,
   });
 
   const contentsTransform = React.useMemo(() => ({
@@ -147,9 +147,6 @@ const CustomCanvas: React.FC<CustomCanvasProps> = (props) => {
   const gestureHandleSystem = useGestureHandleSystem(canvasContext, gestureList);
   const canvasCircleBorderResizeGestureHandler = useCanvasCircleBorderResizeGestureHandler(canvasContext);
 
-  useEffect(() => {
-    console.log('[gestureHandleSystem] 发生改变');
-  }, [gestureHandleSystem]);
 
   // 统一遍历 RENDER_MODULE_LIST 渲染所有模块，自动依赖注入和手势包裹
   const allChildren = useMemo(() => RENDER_MODULE_LIST.flatMap((m, idx) => {
@@ -248,7 +245,7 @@ const CustomCanvas: React.FC<CustomCanvasProps> = (props) => {
     setValue: setChildFullscreenState
   }), [childFullscreenState]);
   const modeObj = useMemo(() => ({ value: mode?.value || CanvasMode.Draw, setValue: () => { } }), [mode]);
-  console.log('CustomCanvas 渲染', props.globalData?.canvases?.value?.length, '个画布', id, '类型:', canvasType, '全屏状态:', fullscreen.value, '子画布全屏状态:', childFullscreenState);
+
   return (
     <GestureDetector gesture={gesture}>
       <View
@@ -312,12 +309,8 @@ const CustomCanvas: React.FC<CustomCanvasProps> = (props) => {
                 globalState={props.globalState} // 传递全局状态
                 style={{
                   ...props.style,
-                  transform: [
-                    { translateX: canvasContentsTransform.translateX },
-                    { translateY: canvasContentsTransform.translateY },
-                    { scale: canvasContentsTransform.scale },
-                  ],
                 }}
+                canvasTransform={contentsTransform}
               />
             ))
         )}

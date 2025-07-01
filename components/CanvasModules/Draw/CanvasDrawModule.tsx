@@ -12,17 +12,26 @@ function CanvasDrawModule({ props, extraParams }: { props: CustomCanvasProps; ex
   const paths: DrawPathInfo[] = props.globalData?.paths?.value || [];
   const id = props.id || '';
   // 画布 transform 透传
-  const { canvasContentsTransform } = extraParams.contentsTransform || { canvasContentsTransform: { scale: 1, translateX: 0, translateY: 0 } };
-  // transform 始终与 canvasContentsTransform 保持同步
-  const transform = canvasContentsTransform;
-  
+  const canvasContentsTransform = extraParams.contentsTransform.value || { canvasContentsTransform: { scale: 1, translateX: 0, translateY: 0 } };
   const currentDrawPathInfo = useSharedValue<DrawPathInfo | null>(null);
   const [renderedPath, setRenderedPath] = useState<DrawPathInfo | null>(null);
+  // 工具函数：将屏幕坐标转为画布坐标
+  const toCanvasPoint = (x: number, y: number) => {
+    const scale = canvasContentsTransform.scale ?? 1;
+    const tx = canvasContentsTransform.translateX ?? 0;
+    const ty = canvasContentsTransform.translateY ?? 0;
+    return {
+      x: (x - tx) / scale,
+      y: (y - ty) / scale,
+    };
+  };
+
   const beginRenderedPath = (x: number, y: number, timestamp: number) => {
-    const newPath = createPathFromPoints([{ x, y }]);
+    const pt = toCanvasPoint(x, y);
+    const newPath = createPathFromPoints([pt]);
     const newPathInfo: DrawPathInfo = {
       id: `${id}-Path-${timestamp}`,
-      points: [{ x, y }],
+      points: [pt],
       color: props.color ?? '#000000',
       size: props.size ?? 3,
       isEraser: props.mode?.value === CanvasMode.Eraser,
@@ -31,13 +40,16 @@ function CanvasDrawModule({ props, extraParams }: { props: CustomCanvasProps; ex
     };
     setRenderedPath(newPathInfo);
   };
-  const updateRenderedPath = (newPoints: { x: number, y: number }[]) => {
+  const updateRenderedPath = (prevCanvasPoints: { x: number, y: number }[], newScreenPoint: { x: number, y: number }) => {
+    // prevCanvasPoints 已是画布坐标，newScreenPoint 需逆变换
+    const pt = toCanvasPoint(newScreenPoint.x, newScreenPoint.y);
+    const pts = [...prevCanvasPoints, pt];
     setRenderedPath(prev => {
       if (!prev) return null;
-      const newPath = createPathFromPoints(newPoints);
+      const newPath = createPathFromPoints(pts);
       const newPathInfo: DrawPathInfo = {
         ...prev,
-        points: newPoints,
+        points: pts,
         path: newPath,
       };
       return newPathInfo;
@@ -46,20 +58,7 @@ function CanvasDrawModule({ props, extraParams }: { props: CustomCanvasProps; ex
   const resetRenderedPath = () => {
     setRenderedPath(null);
   };
-  // 可能会出问题的写法，但是能确保使用的是最新值
-  // const setGlobalPaths = (setRenderedPath: StateUpdater<DrawPathInfo | null>) => {
-  //   if (setRenderedPath) {
-  //     setRenderedPath(p => {
-  //       if (!p) return p;
-  //       const renderedPath = p;
-  //       props.globalData?.setPaths?.(prev => {
-  //         return [...prev, renderedPath];
-  //       });
-  //       return p;
-  //     });
-  //   }
-  //   resetRenderedPath();
-  // };
+
   const setGlobalPaths = () => {
     if (renderedPath && renderedPath.points.length > 1) {
       props.globalData?.paths?.setValue?.(prev => [...prev, renderedPath]);
@@ -79,9 +78,8 @@ function CanvasDrawModule({ props, extraParams }: { props: CustomCanvasProps; ex
     })
     .onUpdate(e => {
       if (!renderedPath) return;
-      const newPoint = { x: e.x, y: e.y };
-      const newPoints = [...renderedPath.points, newPoint];
-      runOnJS(updateRenderedPath)(newPoints);
+      const newScreenPoint = { x: e.x, y: e.y };
+      runOnJS(updateRenderedPath)(renderedPath.points, newScreenPoint);
     })
     .onEnd(() => {
       // 结束时清空当前路径
@@ -114,9 +112,8 @@ function CanvasDrawModule({ props, extraParams }: { props: CustomCanvasProps; ex
         return;
       }
       if (!renderedPath) return;
-      const newPoint = { x: e.x, y: e.y };
-      const newPoints = [...renderedPath.points, newPoint];
-      updateRenderedPath(newPoints);
+      const newScreenPoint = { x: e.x, y: e.y };
+      updateRenderedPath(renderedPath.points, newScreenPoint);
     })
     .onEnd((e) => {
       willDraw.current = true; // 仅单指生效
@@ -142,19 +139,19 @@ function CanvasDrawModule({ props, extraParams }: { props: CustomCanvasProps; ex
         <Animated.View style={{ flex: 1 }} pointerEvents="box-none">
           <Canvas style={[styles.canvas]} pointerEvents="none">
             <Group transform={[
-              { translateX: transform.translateX },
-              { translateY: transform.translateY },
-              { scale: transform.scale },
+              { translateX: canvasContentsTransform.translateX },
+              { translateY: canvasContentsTransform.translateY },
+              { scale: canvasContentsTransform.scale },
             ]}
             origin={{ x: 0, y: 0 }}>
               {paths?.filter(Boolean).map((p: DrawPathInfo, index: number) => (
-                <CanvasDrawItem key={id + `path-${index}`} pathInfo={p} transform={transform} />
+                <CanvasDrawItem key={id + `path-${index}`} pathInfo={p} transform={canvasContentsTransform} />
               ))}
               {/* 用 currentPath 渲染当前路径，避免直接读取 sharedValue.value */}
               {renderedPath && (
                 <CanvasDrawItem key={id + `path-current`}
                   pathInfo={renderedPath}
-                  transform={transform}
+                  transform={canvasContentsTransform}
                 />
               )}
             </Group>

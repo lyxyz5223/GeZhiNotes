@@ -23,32 +23,7 @@ function getModuleInsertStrategies(globalData: any) {
  * @returns gesture handler props，可直接 {...useAddModuleGestureHandler(canvasContext)} 用于 TapGestureHandler
  */
 const useAddModuleGestureHandler = (canvasContext: any) => {
-  // 依赖变化日志
-  useEffect(() => {
-    console.log('[useAddModuleGestureHandler] canvasContext.id changed:', canvasContext.id);
-  }, [canvasContext.id]);
 
-  useEffect(() => {
-    console.log('[useAddModuleGestureHandler] canvasContext.width changed:', canvasContext.width);
-  }, [canvasContext.width]);
-
-  useEffect(() => {
-    console.log('[useAddModuleGestureHandler] canvasContext.height changed:', canvasContext.height);
-  }, [canvasContext.height]);
-
-  useEffect(() => {
-    console.log('[useAddModuleGestureHandler] canvasContext.fontSize changed:', canvasContext.fontSize);
-  }, [canvasContext.fontSize]);
-
-  useEffect(() => {
-    console.log('[useAddModuleGestureHandler] canvasContext.mode changed:', canvasContext.mode);
-  }, [canvasContext.mode]);
-
-  useEffect(() => {
-    console.log('[useAddModuleGestureHandler] canvasContext.globalData changed:', canvasContext.globalData);
-  }, [canvasContext.globalData]);
-
-  console.log('[useAddModuleGestureHandler] 发生变化');
   return useMemo(() => {
     const globalData = canvasContext.globalData; // 全局数据
     if (!globalData) {
@@ -68,7 +43,6 @@ const useAddModuleGestureHandler = (canvasContext: any) => {
       .numberOfTaps(1)
       .runOnJS(true)
       .onEnd((event: any, success: boolean) => {
-        console.log('Tap gesture ended:', event, 'success:', success);
         if (event.numberOfPointers > 1) return; // 仅单指生效
         const x = event.absoluteX as number;
         const y = event.absoluteY as number;

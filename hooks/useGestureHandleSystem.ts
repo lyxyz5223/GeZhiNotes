@@ -7,7 +7,7 @@ import { useMemo } from "react";
 
 const useGestureHandleSystem = (canvasContext: CanvasContext, childrenGestures: any[]) => {
   // 处理缩放手势
-  const pinchContentsGestureHandler = usePinchContentsGestureHandler(canvasContext, childrenGestures).requireExternalGestureToFail();
+  const pinchContentsGestureHandler = usePinchContentsGestureHandler(canvasContext);
   const doubleTapGesture = useMemo(() => {
     const canvasType = canvasContext.canvasType;
     const setIsFullscreen = canvasContext.fullscreen?.setValue || (() => {});
@@ -15,7 +15,6 @@ const useGestureHandleSystem = (canvasContext: CanvasContext, childrenGestures: 
       .numberOfTaps(2)
       .runOnJS(true)
       .onEnd((event: any) => {
-        console.log('[useGestureHandleSystem] 双击事件触发', event);
         setIsFullscreen((prev) => {
           if (canvasType === CanvasType.Child && !prev) {
             return true; // 进入全屏
@@ -33,7 +32,7 @@ const useGestureHandleSystem = (canvasContext: CanvasContext, childrenGestures: 
     if (canvasContext.fullscreen?.value === true) {
       if (canvasContext.canvasType === CanvasType.Child) {
         return Gesture.Simultaneous(pinchContentsGestureHandler);
-      }
+      } 
       return Gesture.Simultaneous(pinchContentsGestureHandler, handleAddModule);
     }
     else {

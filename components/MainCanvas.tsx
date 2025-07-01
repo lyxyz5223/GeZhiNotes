@@ -1,21 +1,24 @@
-import { INIT_SIZE as CANVAS_INIT_SIZE } from "@/constants/CanvasConstants";
 import { allThemes } from "@/constants/CanvasTheme";
 import { initialGlobalStates, useGlobalStatesWithSetters } from "@/hooks/useGlobalStatesWithSetters";
 import { useUndoRedo } from "@/hooks/useUndoRedo";
-import { CanvasMode, CanvasType, DrawPathInfo, EmbeddedCanvasData } from "@/types/CanvasTypes";
-import { GlobalCanvasStates, GlobalPathsType, } from "@/types/MainCanvasType";
+import { CanvasMode, CanvasType, EmbeddedCanvasData } from "@/types/CanvasTypes";
+import { GlobalCanvasStates } from "@/types/MainCanvasType";
+import { createPathFromPoints } from '@/utils/CanvasUtils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemeProvider } from "@react-navigation/native";
 import { Skia } from '@shopify/react-native-skia';
-import React, { useCallback, useEffect, useId, useState } from "react";
+import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Dimensions, StyleSheet, View } from "react-native";
 import CanvasToolbar from "./CanvasToolbar";
 import CustomCanvas from "./CustomCanvas";
 import ThemeSelectorModal from "./ThemeSelectorModal";
 
 
+interface MainCanvasProps {
+  fileId?: string;
+}
 
-export default function MainCanvas() {
+export default function MainCanvas({ fileId }: MainCanvasProps) {
   // 画布列表
   const canvasIdPrefix = "canvas";
   const canvasIdConnector = '-';
@@ -31,6 +34,48 @@ export default function MainCanvas() {
       },
     ]
   );
+
+  // 根据 fileId 加载对应画布
+  useEffect(() => {
+    if (!fileId) return;
+    (async () => {
+      try {
+        const str = await AsyncStorage.getItem('GeZhiNotes:canvasDataList');
+        if (!str) return;
+        const arr = JSON.parse(str);
+        const file = arr.find((f: any) => f.id === fileId);
+        console.log('[MainCanvas] 加载文件', file);
+        if (file && file.data && file.data.globalState) {
+          // 2. 路径反序列化：优先用 points 生成 Skia.Path
+          const fixedGlobalState = { ...file.data.globalState };
+          if (fixedGlobalState.paths) {
+            Object.entries(fixedGlobalState.paths).forEach(([cid, arr]) => {
+              fixedGlobalState.paths[cid] = Array.isArray(arr)
+                ? (arr as any[]).map(item => {
+                    if (item && Array.isArray(item.points) && item.points.length > 0) {
+                      return { ...item, path: createPathFromPoints(item.points) };
+                    }
+                    if (item && typeof item.path === 'string' && item.path.startsWith('M')) {
+                      return { ...item, path: Skia.Path.MakeFromSVGString(item.path) };
+                    }
+                    return item;
+                  })
+                : arr;
+            });
+          }
+          setGlobalState(fixedGlobalState);
+          console.log('[globalState] 加载', fixedGlobalState);
+          // 如有需要同步 setCanvases
+          if (fixedGlobalState.canvases) {
+            const canvasArr = Object.values(fixedGlobalState.canvases).flat() as EmbeddedCanvasData[];
+            if (Array.isArray(canvasArr) && canvasArr.length > 0) {
+              setCanvases(canvasArr);
+            }
+          }
+        }
+      } catch {}
+    })();
+  }, [fileId]);
 
   // 工具栏状态
   const [color, setColor] = useState("#007aff");
@@ -146,72 +191,133 @@ export default function MainCanvas() {
   //   console.log('Global state updated, current state:', globalState);
   // }, [undoRedo, globalState]);
 
-
+  // 启动时自动读取
+  const username = 'user'; // 用户名
+  const password = 'hust'; // 密码
+  const apiUrl = 'http://192.168.202.88:8080/';
+  const token = useRef<string | null>(null);
   // 持久化存储 key
   const STORAGE_KEY = 'GeZhiNotes:canvasData';
+  const TOKEN_KEY = 'GeZhiNotes:token';
   // 读取本地所有画布和全局数据
   const handleLoad = async () => {
-    try {
-      const data = await AsyncStorage.getItem(STORAGE_KEY);
-      if (data) {
-        const parsed = JSON.parse(data);
-        if (parsed.canvases && Array.isArray(parsed.canvases)) setCanvases(parsed.canvases);
-        if (parsed.globalState && typeof parsed.globalState === 'object') {
-          // 路径反序列化
-          const fixedPaths: GlobalPathsType = {};
-          Object.entries(parsed.globalState.paths || {}).forEach(([cid, arr]) => {
-            fixedPaths[cid] = Array.isArray(arr)
-              ? (arr.map((item: any) => {
-                  if (item && typeof item.path === 'string' && item.path.startsWith('M')) {
-                    return { ...item, path: Skia.Path.MakeFromSVGString(item.path) };
-                  }
-                  return item;
-                }) as DrawPathInfo[])
-              : (arr as DrawPathInfo[]);
-          });
-          setGlobalState({
-            ...initialGlobalStates,
-            ...parsed.globalState,
-            paths: fixedPaths,
-          });
-        }
-      }
-    } catch (e) {
-      console.error('读取失败', e);
-    }
   };
   // 保存所有画布和全局数据到本地
   const handleSave = async () => {
-    try {
-      // 路径序列化
-      const serializablePaths: GlobalPathsType = {};
-      Object.entries(globalState.paths).forEach(([canvasId, arr]) => {
-        serializablePaths[canvasId] = Array.isArray(arr) ? arr.map(
-          (item: any) => {
+    // 1. 路径序列化：将 Skia.Path 转为 SVG 字符串
+    const serializableGlobalState = JSON.parse(JSON.stringify(globalState));
+    if (serializableGlobalState.paths) {
+      Object.entries(serializableGlobalState.paths).forEach(([cid, arr]) => {
+        serializableGlobalState.paths[cid] = Array.isArray(arr)
+          ? arr.map((item: any) => {
               if (item && item.path && typeof item.path.toSVGString === 'function') {
                 return { ...item, path: item.path.toSVGString() };
-              }
-              if (item && typeof item.path === 'string') {
-                return { ...item };
               }
               return item;
             })
           : arr;
       });
-      const data = JSON.stringify({
-        canvases: canvases,
-        globalState: { ...globalState, paths: serializablePaths },
-      });
-      await AsyncStorage.setItem(STORAGE_KEY, data);
-    } catch (e) {
-      console.error('保存失败', e);
     }
+    const globalData = JSON.stringify(serializableGlobalState);
+    console.log('[handleSave] 全局数据:', globalData);
+    await AsyncStorage.setItem(STORAGE_KEY, globalData);
+    // 新增：如果有 fileId，保存到 canvasDataList
+    if (fileId) {
+      try {
+        const str = await AsyncStorage.getItem('GeZhiNotes:canvasDataList');
+        if (str) {
+          const arr = JSON.parse(str);
+          const idx = arr.findIndex((f: any) => f.id === fileId);
+          if (idx !== -1) {
+            arr[idx].data = arr[idx].data || {};
+            arr[idx].data.globalState = serializableGlobalState;
+            await AsyncStorage.setItem('GeZhiNotes:canvasDataList', JSON.stringify(arr));
+          }
+        }
+      } catch {}
+    }
+    // ...原有后端同步逻辑...
+    fetch(apiUrl + 'user/save', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'cookie': token.current || '',
+      },
+      body: JSON.stringify({globalData})
+    }).then(response => {
+      console.log('保存, 后端返回:', response);
+      return response.json();
+    }).then(data => {
+      console.log('保存, 后端返回数据:', data);
+    }).catch(error => {
+      console.error('保存请求后端出错:', error);
+    });
   };
 
-  // 启动时自动读取
-  // React.useEffect(() => {
-  //   handleLoad();
-  // }, []);
+  React.useEffect(() => {
+    const registerData = {
+      "name": username,
+      "password": password,
+    };
+    let tokenPromise = null;
+    try {
+      tokenPromise = AsyncStorage.getItem(TOKEN_KEY);
+    } catch (error) {
+      console.error('读取 token 失败:', error);
+    } finally {
+    }
+    tokenPromise?.then((tokenValue) => {
+      console.log('读取到的 token:', tokenValue);
+      token.current = tokenValue;
+      if (!tokenValue) {
+        // 如果没有 token，则先注册用户
+        fetch(apiUrl + 'register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${tokenValue}`
+          },
+          body: JSON.stringify(registerData)
+        })
+          .then(response => response.json())
+          .then(data => {
+            console.log('注册后端返回数据:', data);
+          })
+          .catch(error => {
+            console.error('注册请求后端出错:', error);
+          });
+        // 向后端发起登录请求
+        fetch(apiUrl + 'login', {
+          method: 'POST', // 或 'GET'
+          headers: {
+            'Content-Type': 'application/json',
+            // 其他需要的 headers
+          },
+          body: JSON.stringify(registerData) // 如果是 POST/PUT
+        })
+          .then(response => {
+            // 假设后端用 'Authorization' 或 'token' 作为 header 字段
+            const tk = response.headers.get('set-cookie') || response.headers.get('token');
+            if (tk) {
+              token.current = tk;
+              AsyncStorage.setItem(TOKEN_KEY, tk);
+              console.log('登录响应 header token:', tk);
+            }
+            // 如果还需要 body，可以继续解析
+            return response.json();
+          })
+          .then(data => {
+            console.log('登录后端返回数据:', data);
+            // 可以在这里 setState 或处理数据
+            
+          })
+          .catch(error => {
+            console.error('登录请求后端出错:', error);
+          });
+      }
+
+    });
+  });
 
   // memo化 mode 和 fullscreen，避免对象引用频繁变化
   const modeObj = React.useMemo(() => ({ value: mode, setValue: setMode }), [mode, setMode]);
@@ -233,14 +339,7 @@ export default function MainCanvas() {
           }}
           onClose={() => setThemeModalVisible(false)}
         />
-        {/* 浮动加号按钮 */}
-        {/* <TouchableOpacity
-          style={styles.fab}
-          onPress={addCanvas}
-          activeOpacity={0.8}
-        >
-          <ThemedText style={styles.fabIcon}>＋</ThemedText>
-        </TouchableOpacity> */}
+
         {/* 全局工具栏 */}
         <CanvasToolbar
           color={color}

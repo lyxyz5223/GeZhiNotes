@@ -34,9 +34,9 @@ export type Point = {
 }
 
 export type TransformType = {
-  scale: number;
   translateX: number;
   translateY: number;
+  scale: number;
   // originX: number;
   // originY: number;
 }
@@ -131,6 +131,8 @@ export type TextBlockInfo = {
   text: string;
   x: number;
   y: number;
+  width: number;
+  height: number;
   color?: string;
   fontSize?: number;
   fontFamily?: string;
@@ -148,9 +150,12 @@ export type ImageBlockInfo = {
 
 export type AudioBlockInfo = {
   id: string;
+  name?: string; // 新增，音频文件名
   uri: string;
   x: number;
   y: number;
+  width: number;
+  height: number;
   duration?: number;
 };
 
@@ -158,7 +163,7 @@ export type LinkBlockInfo = {
   id: string;
   fromId: string;
   toId: string;
-  points?: { x: number; y: number }[];
+  points?: Point[];
   color?: string;
 };
 

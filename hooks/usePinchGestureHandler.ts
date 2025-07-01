@@ -2,92 +2,107 @@ import { CanvasContext } from "@/types/CanvasTypes";
 import { useMemo, useRef } from "react";
 import { Gesture } from "react-native-gesture-handler";
 
-/**
- * 用于处理画布内容的拖动（Pan）
- */
-export const usePanContentsGestureHandler = (canvasContext: CanvasContext) => {
+export const usePinchContentsGestureHandler = (canvasContext: CanvasContext) => {
+  const startScaleRef = useRef(1);
   const startTranslateRef = useRef({ x: 0, y: 0 });
-  return useMemo(() =>
-    Gesture.Pan()
-      .runOnJS(true)
-      .onBegin((event) => {
-        // 记录初始平移
+  const startFocalRef = useRef({ x: 0, y: 0 });
+  const baseScaleRef = useRef(1);
+  const isPinchingRef = useRef(false);
+  return useMemo(() => Gesture.Pinch().simultaneousWithExternalGesture()
+    .runOnJS(true)
+    .onBegin((event) => {
+      isPinchingRef.current = false;
+    })
+    .onUpdate((event) => {
+      // 保存当前event所有数据
+      const { numberOfPointers, scale, focalX, focalY } = event;
+      if (numberOfPointers !== 2) {
+        isPinchingRef.current = false;
+        return;
+      }
+      if (!isPinchingRef.current) {
+        // 刚进入双指，归一化scale，只初始化，不setValue
+        startScaleRef.current = canvasContext.contentsTransform.value.scale;
         startTranslateRef.current = {
           x: canvasContext.contentsTransform.value.translateX,
           y: canvasContext.contentsTransform.value.translateY,
         };
-      })
-      .onUpdate((event) => {
-        console.log('ds figjdhskkfdbhunidmosdnfbfhhnidmos,pdfsfkkkkkkkkkkk哈哈哈哈哈哈哈哈哈哈哈哈哈哈哈哈哈哈哈')
-        // 只处理单指拖动
-        if (event.numberOfPointers !== 1) return;
-        const dx = event.translationX;
-        const dy = event.translationY;
+        startFocalRef.current = { x: focalX, y: focalY };
+        baseScaleRef.current = scale;
+        isPinchingRef.current = true;
+        return;
+      }
+      // 只有双指且isPinchingRef为true时才setValue
+      if (isPinchingRef.current) {
+        const startScale = startScaleRef.current;
         const startTranslate = startTranslateRef.current;
-        const newTranslateX = startTranslate.x + dx;
-        const newTranslateY = startTranslate.y + dy;
+        const startFocal = startFocalRef.current;
+        const baseScale = baseScaleRef.current;
+        const relativeScale = scale / baseScale;
+        const newScale = startScale * relativeScale;
+        const newTranslateX = focalX - (startFocal.x - startTranslate.x) * (newScale / startScale);
+        const newTranslateY = focalY - (startFocal.y - startTranslate.y) * (newScale / startScale);
+        canvasContext.contentsTransform.setValue?.((prev) => ({
+          ...prev,
+          translateX: newTranslateX,
+          translateY: newTranslateY,
+          scale: newScale,
+        }));
+      }
+    })
+    .onEnd(() => {
+      isPinchingRef.current = false;
+      console.log('Pinch gesture ended, current contentsTransform:', canvasContext.contentsTransform.value);
+    })
+    , [canvasContext.contentsTransform]);
+};
+
+export const usePanContentsGestureHandler = (canvasContext: CanvasContext) => {
+  const startTranslateRef = useRef({ x: 0, y: 0 });
+  const isPanningRef = useRef(false);
+  return useMemo(() => Gesture.Pan()
+    .minPointers(2)
+    .maxPointers(2)
+    .runOnJS(true)
+    .onBegin(() => {
+      isPanningRef.current = false;
+    })
+    .onUpdate((event) => {
+      const { numberOfPointers, translationX, translationY } = event;
+      if (numberOfPointers !== 2) {
+        isPanningRef.current = false;
+        return;
+      }
+      if (!isPanningRef.current) {
+        startTranslateRef.current = {
+          x: canvasContext.contentsTransform.value.translateX,
+          y: canvasContext.contentsTransform.value.translateY,
+        };
+        isPanningRef.current = true;
+        return;
+      }
+      if (isPanningRef.current) {
+        const startTranslate = startTranslateRef.current;
+        const newTranslateX = startTranslate.x + translationX;
+        const newTranslateY = startTranslate.y + translationY;
         canvasContext.contentsTransform.setValue?.((prev) => ({
           ...prev,
           translateX: newTranslateX,
           translateY: newTranslateY,
         }));
-        // 可选：输出调试信息
-        // console.log('Pan update:', { translateX: newTranslateX, translateY: newTranslateY });
-      })
-      .onEnd(() => {
-        // 拖动结束，可选收尾
-      })
+      }
+    })
+    .onEnd(() => {
+      isPanningRef.current = false;
+    })
     , [canvasContext.contentsTransform]);
 };
 
-/**
- * 用于处理画布内容的缩放
- */
-export const usePinchContentsGestureHandler = (canvasContext: CanvasContext, childrenGestures: any[]) => {
-  const startScaleRef = useRef(1);
-  const startFocalRef = useRef({ x: 0, y: 0 });
-  const startTranslateRef = useRef({ x: 0, y: 0 });
-  return useMemo(() => Gesture.Pinch().simultaneousWithExternalGesture()
-    .runOnJS(true)
-    .onBegin((event) => {
-      // 记录缩放起点
-      startScaleRef.current = canvasContext.contentsTransform.value.scale;
-      // 记录初始锚点和初始平移
-      startFocalRef.current = { x: event.focalX, y: event.focalY };
-      startTranslateRef.current = {
-        x: canvasContext.contentsTransform.value.translateX,
-        y: canvasContext.contentsTransform.value.translateY,
-      };
-    })
-    .onUpdate((event) => {
-      // const prev = canvasContext.contentsTransform.canvasContentsTransform;
-      const newScale = startScaleRef.current * event.scale;
-      const clampedScale = Math.max(0.2, Math.min(newScale, 8));
-      // 以手势中心为锚点调整平移
-      const focal = { x: event.focalX, y: event.focalY };
-      const startFocal = startFocalRef.current;
-      const startTranslate = startTranslateRef.current;
-      // 计算缩放后新的平移，使得缩放锚点保持在手势中心
-      const dx = focal.x - startFocal.x;
-      const dy = focal.y - startFocal.y;
-      const scaleDelta = clampedScale / startScaleRef.current;
-      const newTranslateX = startTranslate.x * scaleDelta + (1 - scaleDelta) * startFocal.x + dx;
-      const newTranslateY = startTranslate.y * scaleDelta + (1 - scaleDelta) * startFocal.y + dy;
-      canvasContext.contentsTransform.setValue?.((prev) => ({
-        ...prev,
-        scale: clampedScale,
-        translateX: newTranslateX,
-        translateY: newTranslateY,
-      }));
-      console.log('Pinch update:', {
-        scale: clampedScale,
-        translateX: newTranslateX,
-        translateY: newTranslateY,
-      });
-    })
-    .onEnd(() => {
-      // 缩放结束，可选收尾
-    })
-    , [canvasContext.contentsTransform]); // 依赖 contentsTransform，确保更新时获取最新状态
+export const useMoveResizeGesture = (canvasContext: CanvasContext) => {
+  const pinch = usePinchContentsGestureHandler(canvasContext);
+  const pan = usePanContentsGestureHandler(canvasContext);
+  return useMemo(() => Gesture.Simultaneous(
+    pinch,
+    pan
+  ), [pinch, pan]);
 };
-
