@@ -1,29 +1,40 @@
 import { CustomCanvasProps, StateUpdater, TextBlockInfo, TransformType } from "@/types/CanvasTypes";
-import React, { useState } from "react";
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { ForwardedRef, useRef, useState } from "react";
+import { Alert, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import Toolbar from "./CanvasTextToolbar";
 
 const HANDLE_SIZE = 18;
 const HANDLE_TOUCH_SIZE = 24;
 const HANDLE_TOUCH_OFFSET = -HANDLE_TOUCH_SIZE / 2;
 
 // 单个文本块组件
-function CanvasTextItem({
-  textBlock,
-  textsInGlobal,
-  setTextsInGlobal,
-  active,
-  setActive,
-  contentsTransform
-}: {
+interface CanvasTextItemProps {
   textBlock: TextBlockInfo;
   textsInGlobal: TextBlockInfo[];
   setTextsInGlobal?: StateUpdater<TextBlockInfo[]>;
   active: { id: string | null; mode: 'drag' | 'resize' | null; corner?: 'br'|'tr'|'bl'|'tl' };
   setActive: React.Dispatch<React.SetStateAction<{ id: string | null; mode: 'drag' | 'resize' | null; corner?: 'br'|'tr'|'bl'|'tl' }>>;
   contentsTransform?: TransformType;
-}) {
+  editingId?: string | null;
+  setEditingId?: (id: string | null) => void;
+}
+
+const CanvasTextItem = React.forwardRef(function CanvasTextItem(
+  props: CanvasTextItemProps,
+  ref: ForwardedRef<any>
+) {
+  const {
+    textBlock,
+    textsInGlobal,
+    setTextsInGlobal,
+    active,
+    setActive,
+    contentsTransform,
+    editingId,
+    setEditingId,
+  } = props;
   const translateX = useSharedValue(textBlock.x);
   const translateY = useSharedValue(textBlock.y);
   const width = useSharedValue(120);
@@ -47,7 +58,20 @@ function CanvasTextItem({
       height: height.value,
       transform: transform.length > 0 ? transform : undefined,
     };
-  }, [contentsTransform]);
+  });
+
+  // 编辑相关
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(typeof textBlock.text === 'string' ? textBlock.text : '');
+  const inputRef = useRef<TextInput>(null);
+
+  // 保证 editValue 与 textBlock.text 同步（组件复用/props 变化时）
+  React.useEffect(() => {
+    if (isEditing) {
+      setEditValue(typeof textBlock.text === 'string' ? textBlock.text : '');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing, textBlock.id]);
 
   // 拖动手势
   const panGesture = Gesture.Pan()
@@ -71,6 +95,27 @@ function CanvasTextItem({
       }
     });
 
+  // 拦截 tap，防止冒泡到父控件，但不做处理
+  const tapGesture = Gesture.Tap().onStart(() => {});
+  // 双击手势，直接进入编辑并激活当前文本块（不再直接 focus）
+  const doubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
+      runOnJS(setActive)({ id: textBlock.id, mode: 'drag' });
+      runOnJS(setEditValue)(typeof textBlock.text === 'string' ? textBlock.text : '');
+      runOnJS(setIsEditing)(true);
+    });
+
+  // 监听 isEditing，变为 true 时安全 focus
+  React.useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isEditing]);
+
+  // 组合手势，保证拖动、单击、双击都能响应
+  const composedGesture = Gesture.Simultaneous(panGesture, tapGesture, doubleTapGesture);
+
   // 删除文本
   const handleDeleteText = () => {
     if (!setTextsInGlobal) return;
@@ -80,40 +125,193 @@ function CanvasTextItem({
     ]);
   };
 
-  return (
-    <GestureDetector gesture={panGesture}>
-      <Animated.View style={[styles.textWrap, animatedStyle, active.id === textBlock.id && active.mode === 'drag' ? styles.active : null]}>
-        <Text style={styles.text}>{textBlock.text}</Text>
-        <TouchableOpacity style={styles.delBtn} onPress={handleDeleteText}>
-          <Text style={{ color: '#e74c3c', fontWeight: 'bold' }}>×</Text>
-        </TouchableOpacity>
-      </Animated.View>
-    </GestureDetector>
+  const handleContentSizeChange = (e: any) => {
+    const contentSize = e?.nativeEvent?.contentSize;
+    if (!contentSize) return;
+    const { width: newWidth, height: newHeight } = contentSize;
+    // 更新文本框尺寸（保留最小宽度/高度）
+    width.value = Math.max(newWidth + 12, 60); // +12 是 padding
+    height.value = Math.max(newHeight + 8, 32);
+  };
+
+  const handleTextLayout = (e: any) => {
+    const layout = e?.nativeEvent?.layout;
+    if (!layout) return;
+    const { width: newWidth, height: newHeight } = layout;
+    width.value = Math.max(newWidth + 12, 60);
+    height.value = Math.max(newHeight + 8, 32);
+  };
+
+  // 编辑完成
+  const handleEndEditing = () => {
+    setIsEditing(false);
+    if (setTextsInGlobal) {
+      let newArr: TextBlockInfo[] = textsInGlobal.map((item: TextBlockInfo) =>
+        item.id === textBlock.id ? { 
+          ...item, 
+          text: editValue,
+          width: width.value,
+          height: height.value
+        } : item
+      );
+      setTextsInGlobal(newArr);
+    }
+  };
+
+  // 保证 editValue 始终与 textBlock.text 同步，且为 string
+  React.useEffect(() => {
+    if (!isEditing) {
+      setEditValue(typeof textBlock.text === 'string' ? textBlock.text : '');
+    }
+  }, [textBlock.text, isEditing]);
+  
+return (
+  <GestureDetector gesture={composedGesture}>
+    <Animated.View
+      style={[styles.textWrap, animatedStyle, active.id === textBlock.id && active.mode === 'drag' ? styles.active : null]}
+    >
+      {isEditing ? (
+        <TextInput
+          ref={inputRef}
+          style={[
+            styles.text,
+            {
+              width: 'auto', // 关键：允许宽度自适应
+              minWidth: 60,  // 设置最小宽度（可选）
+              padding: 0,    // 避免内边距影响计算
+              fontFamily: textBlock.fontFamily || 'System',
+              color: textBlock.color || '#000000',
+              fontSize: textBlock.fontSize || 16,
+            }
+          ]}
+          value={editValue}
+          onChangeText={setEditValue}
+          onContentSizeChange={handleContentSizeChange} // 动态调整大小
+          multiline // 允许换行
+          onEndEditing={handleEndEditing}
+          onBlur={() => setIsEditing(false)}
+          autoFocus
+        />
+      ) : (
+        <Text 
+          style={[
+            styles.text,
+            {
+              fontFamily: textBlock.fontFamily || 'System',
+              color: textBlock.color || '#000000',
+              fontSize: textBlock.fontSize || 16,
+            }
+          ]}
+          onTextLayout={handleTextLayout} // 静态文本尺寸测量//
+        >
+          {textBlock.text}
+        </Text>
+      )}
+      <TouchableOpacity style={styles.delBtn} onPress={handleDeleteText}>
+        <Text style={{ color: '#e74c3c', fontWeight: 'bold' }}>×</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  </GestureDetector>
   );
-}
+});
 
 // 文本模块主组件
 function CanvasTextModule({ props, extraParams }: { props: CustomCanvasProps; extraParams: any }) {
   const textsInGlobal: TextBlockInfo[] = props.globalData?.texts || [];
   const setTextsInGlobal: StateUpdater<TextBlockInfo[]> | undefined = props.globalData?.setTexts;
   const [active, setActive] = useState<{ id: string | null; mode: 'drag' | 'resize' | null; corner?: 'br'|'tr'|'bl'|'tl' }>({ id: null, mode: null });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editingItemRef = useRef<any>(null);
   // 画布 transform 透传
   const { canvasContentsTransform } = extraParams.contentsTransform || { canvasContentsTransform: { scale: 1, translateX: 0, translateY: 0 } };
+  // 更新文本样式
+  const updateTextStyle = (id: string, style: Partial<TextBlockInfo>) => {
+    if (setTextsInGlobal) { // 检查 setTextsInGlobal 是否被定义
+    setTextsInGlobal(prevTexts => 
+      prevTexts.map(text => 
+        text.id === id ? { ...text, ...style } : text
+      )
+    );
+  }
+  };
+  // 处理字体变化
+  const handleFontChange = (font: string) => {
+    if (active.id) {
+      updateTextStyle(active.id, { fontFamily: font });
+    }
+  };
+
+  // 处理颜色变化
+  const handleColorChange = (color: string) => {
+    if (active.id) {
+      updateTextStyle(active.id, { color });
+    }
+  };
+
+  // 处理字号变化
+  const handleSizeChange = (size: number) => {
+    if (active.id) {
+      updateTextStyle(active.id, { fontSize: size });
+    }
+  };
+  // 新建文本框方法
+  const addTextBlock = (x = 100, y = 100) => {
+    if (!setTextsInGlobal) return;
+    const id = Date.now().toString();
+    setTextsInGlobal([
+      ...textsInGlobal,
+      {
+        id,
+        text: '',
+        x,
+        y,
+        color: '#000000',
+        fontSize: 16,
+        fontFamily: 'System'
+      } as TextBlockInfo
+    ]);
+    setEditingId(id);
+  };
+
+  // 只允许空白区域点击新建文本框
+  const handleCanvasPress = (e: any) => {
+    if (editingId) {
+      if (editingItemRef.current && editingItemRef.current.blur) {
+        editingItemRef.current.blur();
+      }
+      return;
+    }
+    // 获取点击位置（相对于画布）
+    const { locationX, locationY } = e.nativeEvent || {};
+    addTextBlock(locationX ?? 100, locationY ?? 100);
+  };
 
   return (
-    <View style={{ flex: 1 }}>
-      {textsInGlobal.map((textBlock: TextBlockInfo) => (
-        <CanvasTextItem
-          key={textBlock.id}
-          textBlock={textBlock}
-          textsInGlobal={textsInGlobal}
-          setTextsInGlobal={setTextsInGlobal}
-          active={active}
-          setActive={setActive}
-          contentsTransform={canvasContentsTransform}
+      <Pressable style={{ flex: 1 }} onPressIn={handleCanvasPress}>
+        <View style={{ flex: 1 }} pointerEvents="box-none">
+          {textsInGlobal.map((textBlock: TextBlockInfo) => (
+            <CanvasTextItem
+              key={textBlock.id}
+              ref={editingId === textBlock.id ? editingItemRef : undefined}
+              textBlock={textBlock}
+              textsInGlobal={textsInGlobal}
+              setTextsInGlobal={setTextsInGlobal}
+              active={active}
+              setActive={setActive}
+              contentsTransform={canvasContentsTransform}
+              editingId={editingId}
+              setEditingId={setEditingId}
+            />
+          ))}
+        </View>
+        {/* 添加工具栏 */}
+        <Toolbar 
+          onFontChange={handleFontChange}
+          onColorChange={handleColorChange}
+          onSizeChange={handleSizeChange}
+          activeId={active.id}
         />
-      ))}
-    </View>
+      </Pressable>
   );
 }
 
@@ -122,7 +320,7 @@ const styles = StyleSheet.create({
     position: 'absolute', minWidth: 60, minHeight: 32, paddingHorizontal: 6, paddingVertical: 2, backgroundColor: '#fffbe6', borderRadius: 6, borderWidth: 1, borderColor: '#eee', flexDirection: 'row', alignItems: 'center',
   },
   text: {
-    minWidth: 40, minHeight: 28, fontSize: 18, color: '#333',
+    minWidth: 40, minHeight: 28,includeFontPadding: false,
   },
   delBtn: {
     marginLeft: 4, padding: 2, borderRadius: 8, backgroundColor: '#fff',

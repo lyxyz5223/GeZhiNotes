@@ -1,6 +1,6 @@
 import { INIT_SIZE as CANVAS_INIT_SIZE } from "@/constants/CanvasConstants";
 import { allThemes } from "@/constants/CanvasTheme";
-import { useUndoRedo } from "@/hooks/useUndoRedo";
+import { useUndoRedo } from "@/hooks/UseUndoRedo";
 import { AudioBlockInfo, CanvasMode, CanvasType, DrawPathInfo, EmbeddedCanvasData, ImageBlockInfo, LinkBlockInfo, TextBlockInfo, VideoBlockInfo, WebLinkBlockInfo } from "@/types/CanvasTypes";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemeProvider } from "@react-navigation/native";
