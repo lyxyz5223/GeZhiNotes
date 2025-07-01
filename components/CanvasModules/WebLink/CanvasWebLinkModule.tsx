@@ -18,9 +18,7 @@ const CanvasWebLinkModule = ({
 }) => {
   return (
     <View style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <Draggable>
         <CanvasWebLink props={props} extraParams={extraParams} />
-      </Draggable>
     </View>
   );
 };
