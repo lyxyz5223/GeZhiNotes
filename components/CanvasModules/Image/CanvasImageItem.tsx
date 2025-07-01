@@ -16,7 +16,7 @@ type CanvasImageItemProps = {
   setImagesInGlobal?: StateUpdater<ImageBlockInfo[]>;
   active: { id: string | null; mode: 'drag' | 'resize' | null; corner?: 'br'|'tr'|'bl'|'tl' };
   setActive: React.Dispatch<React.SetStateAction<{ id: string | null; mode: 'drag' | 'resize' | null; corner?: 'br'|'tr'|'bl'|'tl' }>>;
-  contentsTransform?: TransformType;
+  contentsTransform: TransformType;
 };
 
 const CanvasImageItem = ({ img, imagesInGlobal, setImagesInGlobal, active, setActive, contentsTransform }: CanvasImageItemProps) => {
@@ -26,13 +26,21 @@ const CanvasImageItem = ({ img, imagesInGlobal, setImagesInGlobal, active, setAc
   const height = useSharedValue(img.height);
 
   // 动画样式
-  const animatedStyle = useAnimatedStyle(() => ({
-    position: 'absolute',
-    left: translateX.value,
-    top: translateY.value,
-    width: width.value,
-    height: height.value,
-  }), []);
+  const animatedStyle = useAnimatedStyle(() => {
+    const scale = contentsTransform?.scale ?? 1;
+    const tx = contentsTransform?.translateX ?? 0;
+    const ty = contentsTransform?.translateY ?? 0;
+    return {
+      position: 'absolute',
+      left: translateX.value * scale + tx,
+      top: translateY.value * scale + ty,
+      width: width.value * scale,
+      height: height.value * scale,
+      borderRadius: 8 * scale,
+      paddingHorizontal: 8 * scale,
+      paddingVertical: 4 * scale,
+    };
+  }, [contentsTransform, translateX, translateY, width, height]);
 
   const tapGesture = Gesture.Tap()
   
@@ -116,7 +124,11 @@ const CanvasImageItem = ({ img, imagesInGlobal, setImagesInGlobal, active, setAc
 
   return (
     <GestureDetector gesture={gesture}>
-      <Animated.View style={[styles.imgWrap, animatedStyle, active.id === img.id && (active.mode === 'drag' || active.mode === 'resize') ? styles.active : null]}>
+      <Animated.View style={[
+        styles.imgWrap,
+        animatedStyle,
+        active.id === img.id && (active.mode === 'drag' || active.mode === 'resize') ? styles.active : null,
+      ]}>
         <Image
           source={{ uri: img.uri }}
           style={{ width: '100%', height: '100%', borderRadius: 8, resizeMode: 'contain' }}

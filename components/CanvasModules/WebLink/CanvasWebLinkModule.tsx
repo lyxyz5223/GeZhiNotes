@@ -17,9 +17,7 @@ const CanvasWebLinkModule = ({
   extraParams: any;
 }) => {
   return (
-    <View style={{ position: 'relative', width: '100%', height: '100%' }}>
         <CanvasWebLink props={props} extraParams={extraParams} />
-    </View>
   );
 };
 

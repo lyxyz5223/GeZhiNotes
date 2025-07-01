@@ -23,32 +23,7 @@ function getModuleInsertStrategies(globalData: any) {
  * @returns gesture handler props，可直接 {...useAddModuleGestureHandler(canvasContext)} 用于 TapGestureHandler
  */
 const useAddModuleGestureHandler = (canvasContext: any) => {
-  // 依赖变化日志
-  useEffect(() => {
-    console.log('[useAddModuleGestureHandler] canvasContext.id changed:', canvasContext.id);
-  }, [canvasContext.id]);
 
-  useEffect(() => {
-    console.log('[useAddModuleGestureHandler] canvasContext.width changed:', canvasContext.width);
-  }, [canvasContext.width]);
-
-  useEffect(() => {
-    console.log('[useAddModuleGestureHandler] canvasContext.height changed:', canvasContext.height);
-  }, [canvasContext.height]);
-
-  useEffect(() => {
-    console.log('[useAddModuleGestureHandler] canvasContext.fontSize changed:', canvasContext.fontSize);
-  }, [canvasContext.fontSize]);
-
-  useEffect(() => {
-    console.log('[useAddModuleGestureHandler] canvasContext.mode changed:', canvasContext.mode);
-  }, [canvasContext.mode]);
-
-  useEffect(() => {
-    console.log('[useAddModuleGestureHandler] canvasContext.globalData changed:', canvasContext.globalData);
-  }, [canvasContext.globalData]);
-
-  console.log('[useAddModuleGestureHandler] 发生变化');
   return useMemo(() => {
     const globalData = canvasContext.globalData; // 全局数据
     if (!globalData) {
@@ -59,18 +34,20 @@ const useAddModuleGestureHandler = (canvasContext: any) => {
     const moduleInsertStrategies = getModuleInsertStrategies(globalData);
     // const { mode, globalData, id, fontSize, width, height } = canvasContext;
     const id = canvasContext.id; // 画布 ID
+    const parentId = canvasContext.parentId; // 父画布 ID
     const width = canvasContext.width; // 画布宽度
     const height = canvasContext.height; // 画布高度
     const mode = canvasContext.mode; // 当前模式
     const fontSize = canvasContext.fontSize; // 字体大小
     return Gesture.Tap()
+      .numberOfTaps(1)
       .runOnJS(true)
       .onEnd((event: any, success: boolean) => {
         if (event.numberOfPointers > 1) return; // 仅单指生效
-        const x = event.x as number;
-        const y = event.y as number;
-        const insertFn = moduleInsertStrategies[mode.value as keyof typeof moduleInsertStrategies];
-        console.log('当前模式:', mode.value, '插入位置:', x, y);
+        const x = event.absoluteX as number;
+        const y = event.absoluteY as number;
+        console.log('当前模式:', mode?.value, '插入位置:', x, y);
+        const insertFn = moduleInsertStrategies[mode?.value as keyof typeof moduleInsertStrategies];
         if (insertFn) {
           try {
             // 计算最大宽高（不超过画布宽高的2/3）
@@ -85,13 +62,16 @@ const useAddModuleGestureHandler = (canvasContext: any) => {
             if (id) {
               options.id = id; // 传递画布ID用于 Canvas 模块
             }
+            if (parentId) {
+              options.parentId = parentId; // 传递父ID用于 Canvas 模块
+            }
             insertFn(x, y, options);
           } catch (e) {
             console.error('插入模块失败', e);
           }
         }
       })
-  }, [canvasContext.id, canvasContext.width, canvasContext.height, canvasContext.fontSize, canvasContext.mode, canvasContext.globalData]); // 依赖项确保更新;
+  }, [canvasContext.id, canvasContext.parentId, canvasContext.width, canvasContext.height, canvasContext.fontSize, canvasContext.mode, canvasContext.globalData]); // 依赖项确保更新;
 };
 
 

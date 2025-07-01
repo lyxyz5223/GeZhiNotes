@@ -33,14 +33,14 @@ const RENDER_MODULE_LIST: RenderModuleDef[] = [
   {
     name: 'CanvasDrawModule',
     module: (props: CustomCanvasProps, extraParams: any) => <CanvasDrawModule props={props} extraParams={extraParams} />,
-    deps: [], // 声明依赖
+    deps: ['contentsTransform'],
     gestureHandler: stopPropagationGestureHandler, // 指定手势处理函数
     gestureDeps: [], // 手势依赖参数名数组
   },
   {
     name: 'CanvasTextModule',
     module: (props: CustomCanvasProps, extraParams: any) => <CanvasTextModule props={props} extraParams={extraParams} />,
-    deps: [],
+    deps: ['contentsTransform'],
     gestureHandler: stopPropagationGestureHandler, // 指定手势处理函数
     gestureDeps: [], // 手势依赖参数名数组
   },
@@ -54,28 +54,28 @@ const RENDER_MODULE_LIST: RenderModuleDef[] = [
   {
     name: 'CanvasVideoModule',
     module: (props: CustomCanvasProps, extraParams: any) => <CanvasVideoModule props={props} extraParams={extraParams} />,
-    deps: [],
+    deps: ['contentsTransform'],
     gestureHandler: stopPropagationGestureHandler, // 指定手势处理函数
     gestureDeps: [], // 手势依赖参数名数组
   },
   {
     name: 'CanvasWebLinkModule',
     module: (props: CustomCanvasProps, extraParams: any) => <CanvasWebLinkModule props={props} extraParams={extraParams} />,
-    deps: [],
+    deps: ['contentsTransform'],
     gestureHandler: stopPropagationGestureHandler, // 指定手势处理函数
     gestureDeps: [], // 手势依赖参数名数组
   },
   {
     name: 'CanvasAudioModule',
     module: (props: CustomCanvasProps, extraParams: any) => <CanvasAudioModule props={props} extraParams={extraParams} />,
-    deps: [],
+    deps: ['contentsTransform'],
     gestureHandler: stopPropagationGestureHandler, // 指定手势处理函数
     gestureDeps: [], // 手势依赖参数名数组
   },
   {
     name: 'CanvasLinkModule',
     module: (props: CustomCanvasProps, extraParams: any) => <CanvasLinkModule props={props} extraParams={extraParams} />,
-    deps: [],
+    deps: ['contentsTransform'],
     gestureHandler: stopPropagationGestureHandler, // 指定手势处理函数
     gestureDeps: [], // 手势依赖参数名数组
 },

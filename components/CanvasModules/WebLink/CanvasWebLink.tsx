@@ -16,6 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { WebView } from 'react-native-webview';
 
 interface WebLinkEditModalProps {
@@ -173,6 +174,16 @@ const CanvasWebLink: React.FC<{
   };
   const containerPosition = extraParams?.containerPosition || { x: 50, y: 50 };
 
+  // 获取画布内容缩放参数
+  const contentsTransform = extraParams?.contentsTransform?.value || {
+    scale: 1,
+    translateX: 0,
+    translateY: 0,
+  };
+  const scale = contentsTransform.scale || 1;
+  const translateX = contentsTransform.translateX || 0;
+  const translateY = contentsTransform.translateY || 0;
+
   // 状态
   const webLinksInGlobal: WebLinkBlockInfo[] =
     props.globalData?.webLinks?.value || [];
@@ -189,6 +200,12 @@ const CanvasWebLink: React.FC<{
   } | null>(null);
   const [previewLink, setPreviewLink] = useState<WebLinkBlockInfo | null>(null);
   const [longPressedLink, setLongPressedLink] = useState<string | null>(null);
+  const [draggingLink, setDraggingLink] = useState<string | null>(null);
+  // 集中管理所有链接的 lastTranslation，避免 hooks 错误
+  const lastTranslations = React.useRef<{
+    [id: string]: { x: number; y: number };
+  }>({});
+
   // 处理添加链接
   const handleAddLink = (position: { x: number; y: number }) => {
     // 计算相对于容器的位置
@@ -228,6 +245,7 @@ const CanvasWebLink: React.FC<{
     ]);
     setLongPressedLink(null);
   };
+
   // 保存链接
   const handleSaveLink = (linkData: WebLinkBlockInfo) => {
     if (!setWebLinksInGlobal) {
@@ -267,6 +285,7 @@ const CanvasWebLink: React.FC<{
       });
     }
   };
+
   // 处理长按链接
   const handleLongPress = (link: WebLinkBlockInfo) => {
     // 如果点击的是同一个链接，则关闭预览
@@ -288,7 +307,10 @@ const CanvasWebLink: React.FC<{
       const clampedX = Math.max(0, Math.min(locationX, containerSize.width));
       const clampedY = Math.max(0, Math.min(locationY, containerSize.height));
 
-      handleAddLink({ x: clampedX, y: clampedY });
+      // 反算为原始画布坐标
+      const rawX = (clampedX - translateX) / scale;
+      const rawY = (clampedY - translateY) / scale;
+      handleAddLink({ x: rawX, y: rawY });
     }
   };
 
@@ -303,162 +325,218 @@ const CanvasWebLink: React.FC<{
         />
       )}
       {/* 渲染所有链接 */}
-      {webLinksInGlobal.map((link: WebLinkBlockInfo, idx: number) => (
-        <View
-          key={link.id || `weblink-${idx}`}
-          style={{ position: 'absolute', left: link.x, top: link.y }}
-        >
-          <TouchableOpacity
-            style={[
-              {
-                ...styles.linkContainer,
-                backgroundColor: theme.dark
-                  ? theme.colors.card
-                  : theme.colors.background,
-                borderColor: theme.colors.border,
-              },
-              previewLink?.id === link.id && {
-                ...styles.selectedLink,
-                backgroundColor: theme.dark
-                  ? `${theme.colors.primary}30`
-                  : `${theme.colors.primary}15`,
-                borderColor: theme.colors.primary,
-              }, // 如果当前链接被预览，则添加选中样式
-            ]}
-            onPress={() => handleLinkPress(link.url)}
-            onLongPress={() => handleLongPress(link)}
-            delayLongPress={500}
+      {webLinksInGlobal.map((link: WebLinkBlockInfo, idx: number) => {
+        // 保证每个 link 都有自己的 lastTranslation
+        if (!lastTranslations.current[link.id]) {
+          lastTranslations.current[link.id] = { x: 0, y: 0 };
+        }
+
+        const linkPanGesture = Gesture.Pan()
+          .runOnJS(true)
+          .onBegin(() => {
+            setDraggingLink(link.id);
+            lastTranslations.current[link.id] = { x: 0, y: 0 };
+          })
+          .onUpdate((event) => {
+            if (draggingLink === link.id && setWebLinksInGlobal) {
+              // 拖动时delta需除以scale，保证拖动跟手
+              const deltaX =
+                (event.translationX - lastTranslations.current[link.id].x) /
+                scale;
+              const deltaY =
+                (event.translationY - lastTranslations.current[link.id].y) /
+                scale;
+              setWebLinksInGlobal((prevLinks) =>
+                prevLinks.map((l) =>
+                  l.id === link.id
+                    ? { ...l, x: l.x + deltaX, y: l.y + deltaY }
+                    : l
+                )
+              );
+              lastTranslations.current[link.id] = {
+                x: event.translationX,
+                y: event.translationY,
+              };
+            }
+          })
+          .onEnd(() => {
+            setDraggingLink(null);
+            lastTranslations.current[link.id] = { x: 0, y: 0 };
+          })
+          .maxPointers(1)
+          .minDistance(5);
+
+        return (
+          <View
+            key={link.id || `weblink-${idx}`}
+            style={{
+              position: 'absolute',
+              left: link.x * scale + translateX,
+              top: link.y * scale + translateY,
+              width: link.width * scale,
+              height: link.height * scale,
+              // transform: [{ scale }], // 不建议再加transform:scale，直接算好坐标和尺寸
+            }}
           >
-            <Text
-              style={{
-                ...styles.linkText,
-                color: theme.colors.primary,
-              }}
-            >
-              {link.title || link.url}
-            </Text>
-          </TouchableOpacity>
-          {/* 长按后显示网页预览 */}
-          {previewLink?.id === link.id && (
-            <View
-              style={{
-                ...styles.previewContainer,
-                backgroundColor: theme.colors.card,
-                borderColor: theme.colors.border,
-                shadowColor: theme.dark ? '#000' : '#888',
-              }}
-            >
-              {/* 预览标题栏 */}
-              <View
-                style={{
-                  ...styles.previewHeader,
-                  backgroundColor: theme.colors.background,
-                  borderBottomColor: theme.colors.border,
-                }}
+            <GestureDetector gesture={linkPanGesture}>
+              <TouchableOpacity
+                onPressIn={() => setDraggingLink(link.id)}
+                style={[
+                  {
+                    ...styles.linkContainer,
+                    backgroundColor: theme.dark
+                      ? theme.colors.card
+                      : theme.colors.background,
+                    borderColor: theme.colors.border,
+                    width: '100%',
+                    height: '100%',
+                  },
+                  previewLink?.id === link.id && {
+                    ...styles.selectedLink,
+                    backgroundColor: theme.dark
+                      ? `${theme.colors.primary}30`
+                      : `${theme.colors.primary}15`,
+                    borderColor: theme.colors.primary,
+                  },
+                ]}
+                onPress={() => handleLinkPress(link.url)}
+                onLongPress={() => handleLongPress(link)}
+                delayLongPress={500}
               >
                 <Text
                   style={{
-                    ...styles.previewTitle,
-                    color: theme.colors.text,
+                    ...styles.linkText,
+                    color: theme.colors.primary,
+                    fontSize: 16 * scale, // 字体也随缩放
                   }}
-                  numberOfLines={1}
                 >
                   {link.title || link.url}
                 </Text>
-                <View style={styles.previewActions}>
-                  {mode === CanvasMode.WebLink && (
-                    <>
-                      <TouchableOpacity
-                        style={{
-                          ...styles.previewActionButton,
-                          backgroundColor: theme.dark
-                            ? `${theme.colors.card}`
-                            : theme.colors.background,
-                        }}
-                        onPress={() => handleEditLink(link)}
-                      >
-                        <Text
-                          style={{
-                            ...styles.previewActionText,
-                            color: theme.colors.primary,
-                          }}
-                        >
-                          编辑
-                        </Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={{
-                          ...styles.previewActionButton,
-                          backgroundColor: theme.dark
-                            ? `${theme.colors.card}`
-                            : theme.colors.background,
-                        }}
-                        onPress={() => handleDeleteLink(link.id)}
-                      >
-                        <Text
-                          style={{
-                            ...styles.previewActionText,
-                            color: theme.colors.primary,
-                          }}
-                        >
-                          删除
-                        </Text>
-                      </TouchableOpacity>
-                    </>
-                  )}
-                  <TouchableOpacity
+              </TouchableOpacity>
+            </GestureDetector>
+            {/* 长按后显示网页预览 */}
+            {previewLink?.id === link.id && (
+              <View
+                style={{
+                  ...styles.previewContainer,
+                  backgroundColor: theme.colors.card,
+                  borderColor: theme.colors.border,
+                  shadowColor: theme.dark ? '#000' : '#888',
+                }}
+              >
+                {/* 预览标题栏 */}
+                <View
+                  style={{
+                    ...styles.previewHeader,
+                    backgroundColor: theme.colors.background,
+                    borderBottomColor: theme.colors.border,
+                  }}
+                >
+                  <Text
                     style={{
-                      ...styles.previewActionButton,
-                      backgroundColor: theme.dark
-                        ? `${theme.colors.card}`
-                        : theme.colors.background,
+                      ...styles.previewTitle,
+                      color: theme.colors.text,
                     }}
-                    onPress={() => setPreviewLink(null)}
+                    numberOfLines={1}
                   >
-                    <Text
+                    {link.title || link.url}
+                  </Text>
+                  <View style={styles.previewActions}>
+                    {mode === CanvasMode.WebLink && (
+                      <>
+                        <TouchableOpacity
+                          style={{
+                            ...styles.previewActionButton,
+                            backgroundColor: theme.dark
+                              ? `${theme.colors.card}`
+                              : theme.colors.background,
+                          }}
+                          onPress={() => handleEditLink(link)}
+                        >
+                          <Text
+                            style={{
+                              ...styles.previewActionText,
+                              color: theme.colors.primary,
+                            }}
+                          >
+                            编辑
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={{
+                            ...styles.previewActionButton,
+                            backgroundColor: theme.dark
+                              ? `${theme.colors.card}`
+                              : theme.colors.background,
+                          }}
+                          onPress={() => handleDeleteLink(link.id)}
+                        >
+                          <Text
+                            style={{
+                              ...styles.previewActionText,
+                              color: theme.colors.primary,
+                            }}
+                          >
+                            删除
+                          </Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                    <TouchableOpacity
                       style={{
-                        ...styles.previewActionText,
-                        color: theme.colors.primary,
+                        ...styles.previewActionButton,
+                        backgroundColor: theme.dark
+                          ? `${theme.colors.card}`
+                          : theme.colors.background,
+                      }}
+                      onPress={() => setPreviewLink(null)}
+                    >
+                      <Text
+                        style={{
+                          ...styles.previewActionText,
+                          color: theme.colors.primary,
+                        }}
+                      >
+                        关闭
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* WebView预览 */}
+                <WebView
+                  source={{ uri: link.url }}
+                  style={styles.webView}
+                  startInLoadingState={true}
+                  renderLoading={() => (
+                    <View
+                      style={{
+                        ...styles.loadingContainer,
+                        backgroundColor: theme.colors.background,
                       }}
                     >
-                      关闭
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                      <Text style={{ color: theme.colors.text }}>
+                        加载中...
+                      </Text>
+                    </View>
+                  )}
+                  onError={() => (
+                    <View
+                      style={{
+                        ...styles.errorContainer,
+                        backgroundColor: theme.colors.background,
+                      }}
+                    >
+                      <Text style={{ color: theme.colors.text }}>加载失败</Text>
+                    </View>
+                  )}
+                />
               </View>
-
-              {/* WebView预览 */}
-              <WebView
-                source={{ uri: link.url }}
-                style={styles.webView}
-                startInLoadingState={true}
-                renderLoading={() => (
-                  <View
-                    style={{
-                      ...styles.loadingContainer,
-                      backgroundColor: theme.colors.background,
-                    }}
-                  >
-                    <Text style={{ color: theme.colors.text }}>加载中...</Text>
-                  </View>
-                )}
-                onError={() => (
-                  <View
-                    style={{
-                      ...styles.errorContainer,
-                      backgroundColor: theme.colors.background,
-                    }}
-                  >
-                    <Text style={{ color: theme.colors.text }}>加载失败</Text>
-                  </View>
-                )}
-              />
-            </View>
-          )}
-        </View>
-      ))}
-
+            )}
+          </View>
+        );
+      })}
       {/* 链接编辑对话框 */}
       <WebLinkEditModal
         visible={editModalVisible}

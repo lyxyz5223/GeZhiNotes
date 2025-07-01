@@ -1,11 +1,14 @@
 import {
+  CanvasMode,
   CustomCanvasProps,
   EmbeddedCanvasData,
   LinkBlockInfo,
 } from '@/types/CanvasTypes';
 import { calculateCanvasConnectionPoints } from '@/utils/CanvasUtils';
 import React, { useCallback, useState } from 'react';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet } from 'react-native';
+// 正确导入ConnectNode和CanvasConnections组件
+import CanvasLinkComponents from './CanvasLinkItem';
 
 /**
  * 节点连接模块（连线、锚点等）
@@ -21,6 +24,18 @@ const CanvasLinkModule: React.FC<{
   const color = props.color || '#1976d2';
   const canvases = props.globalData?.canvases?.value || [];
 
+  // 处理删除连接线
+  const handleDeleteLink = useCallback(
+    (linkId: string) => {
+      if (setLinksInGlobal) {
+        setLinksInGlobal((prevLinks) =>
+          prevLinks.filter((link) => link.id !== linkId)
+        );
+        console.log('删除连接线:', linkId);
+      }
+    },
+    [setLinksInGlobal]
+  );
   const [selectedFromCanvasData, setSelectedFromCanvasData] =
     useState<EmbeddedCanvasData | null>(null);
 
@@ -84,36 +99,162 @@ const CanvasLinkModule: React.FC<{
         setSelectedFromCanvasData(null);
       }
     },
-    [selectedFromCanvasData]
+    [selectedFromCanvasData, color, setLinksInGlobal]
+  ); // 获取当前模式 - 尝试从props.mode或extraParams中获取mode
+  const currentMode = props.mode?.value || extraParams?.mode || CanvasMode.Hand;
+  // 只有在Link模式下才显示连接点和删除按钮
+  const isLinkMode = currentMode === CanvasMode.Link; // 添加调试日志，帮助确认当前模式
+  const prevCanvasesRef = React.useRef<{ [id: string]: EmbeddedCanvasData }>(
+    {}
   );
+
+  // 检查画布是否真实移动了
+  const canvasesMovedSinceLastUpdate = useCallback(() => {
+    let moved = false;
+
+    // 比较每个画布的当前位置和上一次位置
+    for (const canvas of canvases) {
+      const prev = prevCanvasesRef.current[canvas.id];
+      if (
+        !prev ||
+        prev.x !== canvas.x ||
+        prev.y !== canvas.y ||
+        prev.width !== canvas.width ||
+        prev.height !== canvas.height
+      ) {
+        moved = true;
+        break;
+      }
+    }
+
+    return moved;
+  }, [canvases]);
+
+  // 保存当前画布位置
+  const saveCurrentCanvasPositions = useCallback(() => {
+    const positions: { [id: string]: EmbeddedCanvasData } = {};
+    for (const canvas of canvases) {
+      positions[canvas.id] = { ...canvas };
+    }
+    prevCanvasesRef.current = positions;
+  }, [canvases]);
+  // 直接更新连接线位置的函数 - 不做任何条件检查，强制更新所有连接线
+  const forceUpdateLinkPoints = useCallback(() => {
+    if (!setLinksInGlobal || linksInGlobal.length === 0) return;
+
+    console.log('强制更新所有连接线位置');
+
+    // 创建一个新的链接数组用于更新
+    const updatedLinks = linksInGlobal.map((link) => {
+      // 找到起点和终点画布
+      const fromCanvas = canvases.find((c) => c.id === link.fromId);
+      const toCanvas = canvases.find((c) => c.id === link.toId);
+
+      // 如果找到了画布，则重新计算连接点
+      if (fromCanvas && toCanvas) {
+        try {
+          // 重新计算连接点
+          const [startPoint, endPoint] = calculateCanvasConnectionPoints(
+            fromCanvas,
+            toCanvas
+          );
+          // 返回更新后的链接对象
+          return {
+            ...link,
+            points: [startPoint, endPoint],
+          };
+        } catch (error) {
+          console.error('更新连接线失败:', error);
+        }
+      }
+      // 如果计算失败或找不到画布，返回原始链接
+      return link;
+    });
+
+    // 更新全局链接状态，不做比较直接更新
+    setLinksInGlobal(updatedLinks);
+
+    // 保存当前画布位置以便下次比较
+    saveCurrentCanvasPositions();
+  }, [canvases, linksInGlobal, setLinksInGlobal, saveCurrentCanvasPositions]);
+
+  // 有条件地更新连接线位置的函数 - 仅在画布移动时更新
+  const updateLinkPoints = useCallback(() => {
+    if (!setLinksInGlobal || linksInGlobal.length === 0) return;
+
+    // 检查画布是否真的移动了
+    if (!canvasesMovedSinceLastUpdate()) {
+      return;
+    }
+
+    console.log('画布位置变化，重新计算连接线位置');
+
+    // 执行强制更新
+    forceUpdateLinkPoints();
+  }, [
+    canvasesMovedSinceLastUpdate,
+    forceUpdateLinkPoints,
+    linksInGlobal.length,
+    setLinksInGlobal,
+  ]);
+  // 使用间隔计时器强制定期更新连接线位置，解决可能的同步问题
+  React.useEffect(() => {
+    // 初始化时立即更新一次
+    if (linksInGlobal.length > 0) {
+      // 立即执行一次强制更新
+      forceUpdateLinkPoints();
+
+      // 设置定期更新间隔 (每秒更新一次，确保连接线始终正确)
+      const intervalId = setInterval(() => {
+        forceUpdateLinkPoints();
+      }, 1000);
+
+      // 清理函数
+      return () => clearInterval(intervalId);
+    }
+  }, [forceUpdateLinkPoints, linksInGlobal.length]);
+
+  // 监听画布数组变化，立即更新连接线
+  React.useEffect(() => {
+    // 当画布数组变化时，立即更新所有连接线
+    if (linksInGlobal.length > 0) {
+      // 使用requestAnimationFrame进行节流，防止过于频繁的更新
+      const rafId = requestAnimationFrame(() => {
+        updateLinkPoints();
+      });
+
+      // 清理函数
+      return () => cancelAnimationFrame(rafId);
+    }
+  }, [canvases, updateLinkPoints, linksInGlobal.length]);
+
+  // 获取画布内容缩放参数
+  const contentsTransform = extraParams?.contentsTransform?.value || { scale: 1, translateX: 0, translateY: 0 };
+
   return (
     <>
-      {canvases.map((canvas, index) =>
-        index === 0 ? null : (
-          <TouchableOpacity
-            key={canvas.id}
-            style={[
-              styles.connectNode,
-              {
-                left: canvas.x + canvas.width / 2 - 15,
-                top: canvas.y + canvas.height / 2 - 15,
-              },
-              selectedFromCanvasData?.id === canvas.id && styles.selectedNode,
-            ]}
-            onPress={() => handleCanvasClick(canvas)}
-          >
-            <View style={styles.connectNodeOuterCircle} />
-            <View
-              style={[
-                styles.nodeInner,
-                {
-                  backgroundColor:
-                    selectedFromCanvasData?.id === canvas.id ? color : '#fff',
-                },
-              ]}
-            />
-          </TouchableOpacity>
-        )
+      {/* 只在Link模式下渲染连接点 */}
+      {isLinkMode && (
+        <CanvasLinkComponents.ConnectNode
+          canvases={canvases}
+          color={color}
+          mode={currentMode}
+          onConnect={(link) => {
+            if (setLinksInGlobal) {
+              setLinksInGlobal((prevLinks) => [...prevLinks, link]);
+            }
+          }}
+          contentsTransform={contentsTransform}
+        />
+      )}
+      {/* 只在Link模式下渲染连接线和删除按钮 */}
+      {linksInGlobal.length > 0 && (
+        <CanvasLinkComponents.CanvasConnections
+          links={linksInGlobal}
+          onDelete={handleDeleteLink}
+          mode={currentMode}
+          contentsTransform={contentsTransform}
+        />
       )}
     </>
   );
