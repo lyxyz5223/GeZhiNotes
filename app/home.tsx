@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -94,7 +95,12 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.root}>
-      <Text style={styles.title}>GeZhiNotes 画布首页</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={styles.title}>GeZhiNotes 画布首页</Text>
+        <TouchableOpacity onPress={() => router.push('/settings')} style={{ padding: 4 }}>
+          <Ionicons name="settings-outline" size={26} color="#007aff" />
+        </TouchableOpacity>
+      </View>
       <TextInput
         style={styles.search}
         placeholder="搜索文件名..."

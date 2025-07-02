@@ -12,7 +12,7 @@ function CanvasDrawModule({ props, extraParams }: { props: CustomCanvasProps; ex
   const paths: DrawPathInfo[] = props.globalData?.paths?.value || [];
   const id = props.id || '';
   // 画布 transform 透传
-  const canvasContentsTransform = extraParams.contentsTransform.value || { canvasContentsTransform: { scale: 1, translateX: 0, translateY: 0 } };
+  const canvasContentsTransform = extraParams.contentsTransform?.value || { translateX: 0, translateY: 0, scale: 1 };
   const currentDrawPathInfo = useSharedValue<DrawPathInfo | null>(null);
   const [renderedPath, setRenderedPath] = useState<DrawPathInfo | null>(null);
   // 工具函数：将屏幕坐标转为画布坐标
@@ -135,24 +135,19 @@ function CanvasDrawModule({ props, extraParams }: { props: CustomCanvasProps; ex
   return (
     <View style={{ flex: 1 }}>
       <GestureDetector gesture={syncPanGesture}>
-        { /*, backgroundColor: '#ff000022'*/ }
         <Animated.View style={{ flex: 1 }} pointerEvents="box-none">
           <Canvas style={[styles.canvas]} pointerEvents="none">
             <Group transform={[
               { translateX: canvasContentsTransform.translateX },
               { translateY: canvasContentsTransform.translateY },
               { scale: canvasContentsTransform.scale },
-            ]}
-            origin={{ x: 0, y: 0 }}>
+            ]} origin={{ x: 0, y: 0 }}>
               {paths?.filter(Boolean).map((p: DrawPathInfo, index: number) => (
-                <CanvasDrawItem key={id + `path-${index}`} pathInfo={p} transform={canvasContentsTransform} />
+                <CanvasDrawItem key={id + `path-${index}`} pathInfo={p} />
               ))}
               {/* 用 currentPath 渲染当前路径，避免直接读取 sharedValue.value */}
               {renderedPath && (
-                <CanvasDrawItem key={id + `path-current`}
-                  pathInfo={renderedPath}
-                  transform={canvasContentsTransform}
-                />
+                <CanvasDrawItem key={id + `path-current`} pathInfo={renderedPath} />
               )}
             </Group>
           </Canvas>

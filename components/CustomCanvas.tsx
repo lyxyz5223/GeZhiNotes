@@ -1,14 +1,18 @@
 // import { useCanvasContentsGesture, useCanvasContentsMoveResizeGesture, useDrawGesture } from "@/hooks/UseCanvasContentsGesture";
+import { INIT_SIZE as CANVAS_INIT_SIZE } from "@/constants/CanvasConstants";
 import RENDER_MODULE_LIST from "@/constants/CustomCanvasRenderModuleList";
 
 import { useCanvasCircleBorderResizeGestureHandler } from "@/hooks/useCanvasGestureHandler";
 import useGestureHandleSystem from "@/hooks/useGestureHandleSystem";
 import { initialGlobalStates, useGlobalStatesWithSetters } from "@/hooks/useGlobalStatesWithSetters";
-import { CanvasContext, CanvasMode, CanvasType, CustomCanvasProps, TransformType } from "@/types/CanvasTypes";
+import { CanvasContext, CanvasMode, CanvasType, CustomCanvasProps, EmbeddedCanvasData, TransformType } from "@/types/CanvasTypes";
 import { GlobalCanvasStates } from "@/types/MainCanvasType";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { GestureDetector } from "react-native-gesture-handler";
+
+// 子画布id自增种子
+let childCanvasIdSeed = 1;
 
 // 只接收一个 props 对象，便于后续 context/解构扩展
 const CustomCanvas: React.FC<CustomCanvasProps> = (props) => {
@@ -68,6 +72,8 @@ const CustomCanvas: React.FC<CustomCanvasProps> = (props) => {
   const memoizedGlobalData = React.useMemo(() => ({ ...dataSetters }), [dataSetters]);
   
   const canvasViewRef = useRef<View>(null);
+  // 记录画布View的屏幕绝对位置
+  const canvasViewScreenPos = useRef({ left: 0, top: 0 });
   // 画布内容缩放
   const [canvasContentsTransform, setCanvasContentsTransform] = useState<TransformType>({
     translateX: 0,
@@ -94,12 +100,44 @@ const CustomCanvas: React.FC<CustomCanvasProps> = (props) => {
 
   // 监听画布布局变化
   const handleLayout = (event: LayoutChangeEvent) => {
-    // const { x, y } = event.nativeEvent.layout;
-    // console.log('画布布局', event.nativeEvent.layout);
-    // canvasLayoutRef.current = { x: x, y: y };
+    // 获取画布View在屏幕上的绝对位置
+    if (canvasViewRef.current) {
+      canvasViewRef.current.measure((x, y, width, height, pageX, pageY) => {
+        canvasViewScreenPos.current = { left: pageX, top: pageY };
+      });
+    }
   };
 
-
+  // 点击添加子画布
+  const handleAddChildCanvas = (evt: any) => {
+    // 只允许主画布添加子画布
+    if (canvasType !== CanvasType.Main || mode?.value !== CanvasMode.Canvas) return;
+    // 用 pageX/pageY - 画布View屏幕左上角 得到相对画布内容的像素坐标
+    const { pageX, pageY } = evt.nativeEvent;
+    const { left, top } = canvasViewScreenPos.current;
+    const localX = pageX - left;
+    const localY = pageY - top;
+    // 逆变换到画布坐标（需减去主画布x/y，适配transform）
+    const scale = canvasContentsTransform.scale ?? 1;
+    const tx = canvasContentsTransform.translateX ?? 0;
+    const ty = canvasContentsTransform.translateY ?? 0;
+    // 注意：主画布x/y为0，子画布有x/y时已在transform中处理
+    const x = (localX - tx) / scale - CANVAS_INIT_SIZE / 2;
+    const y = (localY - ty) / scale - CANVAS_INIT_SIZE / 2;
+    // 递增生成唯一id
+    const id = `${props.id}-child-canvas-${childCanvasIdSeed++}`;
+    console.log(`Adding child canvas with id: ${id}, parentId: ${props.id}`);
+    console.log(`Adding child canvas at local position: (${x}, ${y})`);
+    const newCanvas: EmbeddedCanvasData = {
+      id: id,
+      parentId: props.id,
+      x: x,
+      y: y,
+      width: CANVAS_INIT_SIZE,
+      height: CANVAS_INIT_SIZE,
+    };
+    props.globalData?.canvases?.setValue?.((prev: EmbeddedCanvasData[] = []) => [...prev, newCanvas]);
+  };
 
   // 统一收集所有画布状态和操作，后续可用 context 提供
   const canvasContext: CanvasContext = {
@@ -221,10 +259,18 @@ const CustomCanvas: React.FC<CustomCanvasProps> = (props) => {
           zIndex: zIndex,
         };
       } else if (canvasType === CanvasType.Child) {
+        const { scale } = canvasTransform.value;
+        // 子画布相对于主画布的偏移
+        const left = x * scale + canvasTransform.value.translateX;
+        const top = y * scale + canvasTransform.value.translateY;
+        const width = props.width * scale;
+        const height = props.height * scale;
+        const borderRadius = width / 2; // 默认圆形
+
         return {
           position: 'absolute',
-          left: x,
-          top: y,
+          left: left,
+          top: top,
           width: width,
           height: height,
           borderRadius: borderRadius,
@@ -253,15 +299,18 @@ const CustomCanvas: React.FC<CustomCanvasProps> = (props) => {
         style={[
           rootViewStyle,
           style,
-          {
-            transform: [
-              { translateX: canvasTransform.value.translateX },
-              { translateY: canvasTransform.value.translateY },
-              { scale: canvasTransform.value.scale },
-            ],
-          },
+          // canvasType === CanvasType.Child && !fullscreen.value && {
+          //   transform: [
+          //     { translateX: canvasTransform.value.translateX },
+          //     { translateY: canvasTransform.value.translateY },
+          //     { scale: canvasTransform.value.scale },
+          //   ],
+          //   transformOrigin: `${x} ${y}`, // 确保缩放中心在左上角
+          // },
         ]}
         onLayout={handleLayout}
+        onStartShouldSetResponder={() => true}
+        onResponderRelease={handleAddChildCanvas}
       >
         {/* 全屏子画布时显示退出全屏按钮 */}
         {fullscreen.value && canvasType === CanvasType.Child && (
@@ -288,9 +337,9 @@ const CustomCanvas: React.FC<CustomCanvasProps> = (props) => {
           props.globalData?.canvases?.value?.map(
             (canvas, idx) => (idx === 0 ? null : // 跳过主画布本身
               <CustomCanvas
+                key={canvas.id} // 确保唯一性
                 id={canvas.id}
                 parentId={canvas.parentId} // 设置父画布 ID
-                key={canvas.id} // 确保唯一性
                 x={canvas.x}
                 y={canvas.y}
                 width={canvas.width}

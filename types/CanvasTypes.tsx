@@ -1,6 +1,6 @@
-import { Skia } from "@shopify/react-native-skia";
-import { GlobalCanvasStates as MainGlobalCanvasStates} from "./MainCanvasType";
 import { UndoRedoStack } from "@/hooks/useUndoRedo";
+import { Skia } from "@shopify/react-native-skia";
+import { GlobalCanvasStates as MainGlobalCanvasStates } from "./MainCanvasType";
 // 通用 StateUpdater 泛型，用于表示setState的setter函数
 export type StateUpdater<T> = (updater: T | ((prev: T) => T)) => void;
 
@@ -128,14 +128,19 @@ export type EmbeddedCanvasData = {
 
 export type TextBlockInfo = {
   id: string;
-  text: string;
+  text: string; // 富文本内容
+  plainText: string; // 纯文本内容
   x: number;
   y: number;
   width: number;
   height: number;
-  color?: string;
+  // 富文本样式字段
   fontSize?: number;
   fontFamily?: string;
+  fontColor?: string;
+  isBold?: boolean;
+  isItalic?: boolean;
+  isUnderline?: boolean;
 };
 
 export type ImageBlockInfo = {
@@ -183,6 +188,8 @@ export type WebLinkBlockInfo = {
   url: string;
   x: number;
   y: number;
+  width: number;
+  height: number;
   title?: string;
 };
 

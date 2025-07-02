@@ -1,196 +1,497 @@
 import { CustomCanvasProps, StateUpdater, TextBlockInfo, TransformType } from "@/types/CanvasTypes";
-import React, { useCallback, useState } from "react";
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useCallback, useMemo, useState } from "react";
+import { StyleSheet, TouchableOpacity, View } from "react-native";
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { RichEditor, RichToolbar, actions } from 'react-native-pell-rich-editor';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
-import RenderHTML from 'react-native-render-html';
+import SimpleRichEditor, { Toolbar, ToolbarIcon } from './SimpleRichEditor';
 
-const HANDLE_SIZE = 18;
-const HANDLE_TOUCH_SIZE = 24;
-const HANDLE_TOUCH_OFFSET = -HANDLE_TOUCH_SIZE / 2;
-
-// 富文本数据结构扩展
-export interface RichTextBlockInfo extends TextBlockInfo {
-  content: string; // HTML 字符串
+// 富文本转纯文本工具
+function htmlToPlainText(html: string): string {
+  if (!html) return '';
+  return html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
 }
 
-// 单个文本块组件
+const MIN_WIDTH = 120;
+const MIN_HEIGHT = 40;
+
 function CanvasTextItem({
   textBlock,
   textsInGlobal,
   setTextsInGlobal,
-  active,
-  setActive,
   contentsTransform
 }: {
-  textBlock: RichTextBlockInfo;
-  textsInGlobal: RichTextBlockInfo[];
-  setTextsInGlobal?: StateUpdater<RichTextBlockInfo[]>;
-  active: { id: string | null; mode: 'drag' | 'resize' | 'edit' | null; corner?: 'br'|'tr'|'bl'|'tl' };
-  setActive: React.Dispatch<React.SetStateAction<{ id: string | null; mode: 'drag' | 'resize' | 'edit' | null; corner?: 'br'|'tr'|'bl'|'tl' }>>;
+  textBlock: TextBlockInfo;
+  textsInGlobal: TextBlockInfo[];
+  setTextsInGlobal?: StateUpdater<TextBlockInfo[]>;
   contentsTransform?: TransformType;
 }) {
+  // 拖动与缩放
   const translateX = useSharedValue(textBlock.x);
   const translateY = useSharedValue(textBlock.y);
-  const width = useSharedValue(textBlock.width || 120);
-  const height = useSharedValue(textBlock.height || 40);
+  const width = useSharedValue(textBlock.width || MIN_WIDTH);
+  const height = useSharedValue(textBlock.height || MIN_HEIGHT);
   const [editing, setEditing] = useState(false);
-  const editorRef = React.useRef<any>(null);
-  const [html, setHtml] = useState(textBlock.content || '<p style="color:#333;font-size:18px;">请输入文本</p>');
-  const [showToolbar, setShowToolbar] = useState(false);
-  // 动画样式，合并画布 transform
+  const [html, setHtml] = useState(textBlock.text);
+  const [toolbarVisible, setToolbarVisible] = useState(false);
+
+  // 富文本样式本地状态
+  const [fontSize, setFontSize] = useState(textBlock.fontSize ?? 17);
+  const [fontFamily, setFontFamily] = useState<string|undefined>(textBlock.fontFamily);
+  const [fontColor, setFontColor] = useState<string>(textBlock.fontColor ?? '#333');
+  const [isBold, setIsBold] = useState(!!textBlock.isBold);
+  const [isItalic, setIsItalic] = useState(!!textBlock.isItalic);
+  const [isUnderline, setIsUnderline] = useState(!!textBlock.isUnderline);
+
+  // ========== 缩放逻辑仿照 Audio 模块 ========== //
+  // 支持四边缩放
+  const [isResizing, setIsResizing] = useState(false);
+  const widthRef = React.useRef(width.value);
+  const heightRef = React.useRef(height.value);
+  React.useEffect(() => { widthRef.current = width.value; }, [width.value]);
+  React.useEffect(() => { heightRef.current = height.value; }, [height.value]);
+  // 四边缩放起点
+  const topResizeStart = React.useRef({ height: 0, y: 0 });
+  const bottomResizeStart = React.useRef({ height: 0 });
+  const leftResizeStart = React.useRef({ width: 0, x: 0 });
+  const rightResizeStart = React.useRef({ width: 0 });
+  // 拖动区宽度（随缩放自适应）
+  const scale = contentsTransform?.scale ?? 1;
+  const edgeHotWidth = 12 * scale;
+
+  // 上边界拖拽
+  const topResizeGesture = React.useMemo(() =>
+    Gesture.Pan()
+      .runOnJS(true)
+      .onBegin(() => {
+        setIsResizing(true);
+        topResizeStart.current = { height: heightRef.current, y: translateY.value };
+      })
+      .onUpdate(e => {
+        const scale = contentsTransform?.scale ?? 1;
+        let newHeight = topResizeStart.current.height - e.translationY / scale;
+        let newY = topResizeStart.current.y + e.translationY / scale;
+        if (newHeight < MIN_HEIGHT) {
+          newY -= (MIN_HEIGHT - newHeight);
+          newHeight = MIN_HEIGHT;
+        }
+        height.value = newHeight;
+        translateY.value = newY;
+      })
+      .onEnd(() => {
+        setIsResizing(false);
+        if (setTextsInGlobal) {
+          setTextsInGlobal(prev => prev.map(item => item.id === textBlock.id ? {
+            ...item,
+            height: height.value,
+            y: translateY.value
+          } : item));
+        }
+      }),
+    [contentsTransform, setTextsInGlobal, textBlock.id, height, translateY]
+  );
+  // 下边界拖拽
+  const bottomResizeGesture = React.useMemo(() =>
+    Gesture.Pan()
+      .runOnJS(true)
+      .onBegin(() => {
+        setIsResizing(true);
+        bottomResizeStart.current = { height: heightRef.current };
+      })
+      .onUpdate(e => {
+        const scale = contentsTransform?.scale ?? 1;
+        let newHeight = bottomResizeStart.current.height + e.translationY / scale;
+        if (newHeight < MIN_HEIGHT) newHeight = MIN_HEIGHT;
+        height.value = newHeight;
+      })
+      .onEnd(() => {
+        setIsResizing(false);
+        if (setTextsInGlobal) {
+          setTextsInGlobal(prev => prev.map(item => item.id === textBlock.id ? {
+            ...item,
+            height: height.value
+          } : item));
+        }
+      }),
+    [contentsTransform, setTextsInGlobal, textBlock.id, height]
+  );
+  // 左边界拖拽
+  const leftResizeGesture = React.useMemo(() =>
+    Gesture.Pan()
+      .runOnJS(true)
+      .onBegin(() => {
+        setIsResizing(true);
+        leftResizeStart.current = { width: widthRef.current, x: translateX.value };
+      })
+      .onUpdate(e => {
+        const scale = contentsTransform?.scale ?? 1;
+        let newWidth = leftResizeStart.current.width - e.translationX / scale;
+        let newX = leftResizeStart.current.x + e.translationX / scale;
+        if (newWidth < MIN_WIDTH) {
+          newX -= (MIN_WIDTH - newWidth);
+          newWidth = MIN_WIDTH;
+        }
+        width.value = newWidth;
+        translateX.value = newX;
+      })
+      .onEnd(() => {
+        setIsResizing(false);
+        if (setTextsInGlobal) {
+          setTextsInGlobal(prev => prev.map(item => item.id === textBlock.id ? {
+            ...item,
+            width: width.value,
+            x: translateX.value
+          } : item));
+        }
+      }),
+    [contentsTransform, setTextsInGlobal, textBlock.id, width, translateX]
+  );
+  // 右边界拖拽
+  const rightResizeGesture = React.useMemo(() =>
+    Gesture.Pan()
+      .runOnJS(true)
+      .onBegin(() => {
+        setIsResizing(true);
+        rightResizeStart.current = { width: widthRef.current };
+      })
+      .onUpdate(e => {
+        const scale = contentsTransform?.scale ?? 1;
+        let newWidth = rightResizeStart.current.width + e.translationX / scale;
+        if (newWidth < MIN_WIDTH) newWidth = MIN_WIDTH;
+        width.value = newWidth;
+      })
+      .onEnd(() => {
+        setIsResizing(false);
+        if (setTextsInGlobal) {
+          setTextsInGlobal(prev => prev.map(item => item.id === textBlock.id ? {
+            ...item,
+            width: width.value
+          } : item));
+        }
+      }),
+    [contentsTransform, setTextsInGlobal, textBlock.id, width]
+  );
+
+  // 拖动手势（用Gesture.Pan替换panResponder）
+  const dragStart = React.useRef({ x: textBlock.x, y: textBlock.y });
+  const panGesture = React.useMemo(() =>
+    Gesture.Pan()
+      .minPointers(1)
+      .maxPointers(1)
+      .runOnJS(true)
+      .onBegin(() => {
+        if (isResizing) return;
+        dragStart.current = { x: textBlock.x, y: textBlock.y };
+      })
+      .onUpdate(e => {
+        if (isResizing) return;
+        const scale = contentsTransform?.scale ?? 1;
+        translateX.value = dragStart.current.x + e.translationX / scale;
+        translateY.value = dragStart.current.y + e.translationY / scale;
+      })
+      .onEnd(e => {
+        if (isResizing) return;
+        const scale = contentsTransform?.scale ?? 1;
+        const newX = dragStart.current.x + e.translationX / scale;
+        const newY = dragStart.current.y + e.translationY / scale;
+        if (setTextsInGlobal) {
+          setTextsInGlobal(prev => prev.map(item => item.id === textBlock.id ? {
+            ...item,
+            x: newX,
+            y: newY
+          } : item));
+        }
+      })
+  , [setTextsInGlobal, textBlock, contentsTransform, translateX, translateY, isResizing]);
+
+  // 仿照Audio模块，动画样式需适配contentsTransform的scale/translate
   const animatedStyle = useAnimatedStyle(() => {
-    let transform: ({ translateX: number } | { translateY: number } | { scale: number })[] = [];
-    if (contentsTransform) {
-      transform = [
-        { translateX: contentsTransform.translateX },
-        { translateY: contentsTransform.translateY },
-        { scale: contentsTransform.scale },
-      ];
-    }
+    const scale = contentsTransform?.scale ?? 1;
+    const tx = contentsTransform?.translateX ?? 0;
+    const ty = contentsTransform?.translateY ?? 0;
     return {
       position: 'absolute',
-      left: translateX.value,
-      top: translateY.value,
-      width: width.value,
-      height: height.value,
-      transform: transform.length > 0 ? transform : undefined,
+      left: translateX.value * scale + tx,
+      top: translateY.value * scale + ty,
+      width: width.value * scale,
+      height: height.value * scale,
+      minWidth: MIN_WIDTH * scale,
+      minHeight: MIN_HEIGHT * scale,
+      borderRadius: 8 * scale,
       zIndex: editing ? 100 : 1,
     };
-  }, [contentsTransform, editing]);
+  }, [contentsTransform, editing, translateX, translateY, width, height]);
 
-  // 点击文本块进入编辑
-  const handleEdit = () => {
-    setEditing(true);
-    setActive({ id: textBlock.id, mode: 'edit' });
-    setShowToolbar(true);
-  };
   // 编辑完成保存
   const handleSave = (newHtml: string) => {
     setEditing(false);
-    setShowToolbar(false);
     setHtml(newHtml);
     if (setTextsInGlobal) {
-      setTextsInGlobal(prev => prev.map(item => item.id === textBlock.id ? { ...item, content: newHtml } : item));
+      setTextsInGlobal(prev => prev.map(item => item.id === textBlock.id ? {
+        ...item,
+        text: newHtml,
+        plainText: htmlToPlainText(newHtml),
+        fontSize,
+        fontFamily,
+        fontColor,
+        isBold,
+        isItalic,
+        isUnderline,
+      } : item));
     }
-    setActive({ id: null, mode: null });
   };
-  // 删除文本
-  const handleDeleteText = useCallback(() => {
-    if (!setTextsInGlobal) return;
-    Alert.alert('删除文本', '确定要删除该文本吗？', [
-      { text: '取消', style: 'cancel' },
-      { text: '删除', style: 'destructive', onPress: () => setTextsInGlobal((prev: RichTextBlockInfo[]) => (prev || []).filter(i => i.id !== textBlock.id)) }
-    ]);
-  }, [setTextsInGlobal, textBlock.id]);
+
+  // 编辑器样式变化时同步本地状态
+  const handleStyleChange = React.useCallback((style: {
+    fontSize: number;
+    fontFamily?: string;
+    fontColor: string;
+    isBold: boolean;
+    isItalic: boolean;
+    isUnderline: boolean;
+  }) => {
+    setFontSize(style.fontSize);
+    setFontFamily(style.fontFamily);
+    setFontColor(style.fontColor);
+    setIsBold(style.isBold);
+    setIsItalic(style.isItalic);
+    setIsUnderline(style.isUnderline);
+  }, [setFontSize, setFontFamily, setFontColor, setIsBold, setIsItalic, setIsUnderline]);
 
   return (
-    <GestureDetector gesture={Gesture.Tap().onEnd(handleEdit)}>
-      <Animated.View style={[styles.textWrap, animatedStyle, active.id === textBlock.id && (active.mode === 'drag' || active.mode === 'edit') ? styles.active : null]}>
+    <GestureDetector gesture={panGesture}>
+      <Animated.View style={[
+        styles.textWrap,
+        animatedStyle,
+        // 显示边界高亮，编辑时为主题色，非编辑时为浅灰色
+        {
+          borderWidth: 2,
+          borderColor: editing ? '#007aff' : '#e0e0e0',
+          borderStyle: 'dashed',
+          borderRadius: 8,
+          backgroundColor: 'transparent',
+        }
+      ]}>
         {editing ? (
-          <View style={{ flex: 1, minWidth: 100, minHeight: 40 }}>
-            <RichEditor
-              ref={editorRef}
-              initialContentHTML={html}
-              editorStyle={{ backgroundColor: '#fffbe6' }}
-              onChange={setHtml}
-              onBlur={() => handleSave(html)}
-              placeholder="请输入文本"
-              useContainer={false}
-            />
-            {showToolbar && (
-              <RichToolbar
-                editor={editorRef}
-                actions={[actions.setBold, actions.setItalic, actions.setUnderline, actions.setStrikethrough, actions.fontSize, actions.foreColor]}
-                iconTint="#007aff"
-                selectedIconTint="#ff9800"
-                style={{ backgroundColor: '#fff', borderRadius: 8, marginTop: 4 }}
-              />
+          <View style={{ flex: 1, minWidth: MIN_WIDTH, minHeight: MIN_HEIGHT }}>
+            {/* 菜单按钮，绝对定位在文本块外部右上角，不遮挡输入区域 */}
+            <View style={{ position: 'absolute', right: -48, top: 0, zIndex: 20 }} pointerEvents="box-none">
+              <TouchableOpacity
+                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#007aff', alignItems: 'center', justifyContent: 'center', elevation: 2, pointerEvents: 'auto' }}
+                onPress={() => setToolbarVisible(v => !v)}
+              >
+                <ToolbarIcon color="#fff" />
+              </TouchableOpacity>
+            </View>
+            {/* 富文本菜单弹窗 */}
+            {toolbarVisible && (
+              <View style={{ position: 'absolute', right: 0, top: 48, backgroundColor: '#fff', borderRadius: 12, padding: 12, elevation: 8, maxWidth: 320, minWidth: 180, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, zIndex: 9999, width: 220 }} pointerEvents="box-none">
+                <Toolbar
+                  fontSize={fontSize}
+                  fontFamily={fontFamily}
+                  fontColor={fontColor}
+                  isBold={isBold}
+                  isItalic={isItalic}
+                  isUnderline={isUnderline}
+                  setFontSize={setFontSize}
+                  setFontFamily={setFontFamily}
+                  setFontColor={setFontColor}
+                  onStyleChange={handleStyleChange}
+                  onClose={() => setToolbarVisible(false)}
+                  fontSizeInput // 新增：传递标记，Toolbar 内部用输入框替代下拉
+                />
+              </View>
             )}
+            <SimpleRichEditor
+              value={html}
+              onChange={setHtml}
+              fontSize={fontSize} // 用原始字号
+              fontFamily={fontFamily}
+              fontColor={fontColor}
+              isBold={isBold}
+              isItalic={isItalic}
+              isUnderline={isUnderline}
+              onStyleChange={handleStyleChange}
+              showToolbar={false} // 不渲染内置菜单
+            />
+            <TouchableOpacity style={{ marginTop: 8, alignSelf: 'flex-end', backgroundColor: '#007aff', borderRadius: 4, paddingHorizontal: 12, paddingVertical: 6 }} onPress={() => handleSave(html)}>
+              <Animated.Text style={{ color: '#fff' }}>完成</Animated.Text>
+            </TouchableOpacity>
           </View>
         ) : (
-          <TouchableOpacity style={{ flex: 1 }} activeOpacity={0.8} onPress={handleEdit}>
-            <RenderHTML contentWidth={width.value} source={{ html }} />
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={0.8} onPress={() => setEditing(true)}>
+            <View style={{ flex: 1, minHeight: MIN_HEIGHT, minWidth: MIN_WIDTH, justifyContent: 'center' }}>
+              {/* 只读模式下用 Text 展示内容，避免 TextInput 被 pointerEvents 拦截 */}
+              <View style={{ padding: 10 }}>
+                <Animated.Text
+                  style={{
+                    color: fontColor,
+                    fontSize: fontSize, // 用原始字号
+                    fontFamily: fontFamily,
+                    fontWeight: isBold ? 'bold' : 'normal',
+                    fontStyle: isItalic ? 'italic' : 'normal',
+                    textDecorationLine: isUnderline ? 'underline' : 'none',
+                    flexWrap: 'wrap',
+                    flexShrink: 1,
+                    flexGrow: 1,
+                    width: '100%',
+                    minWidth: 0,
+                    minHeight: 0,
+                    includeFontPadding: false,
+                    textAlignVertical: 'top',
+                    overflow: 'visible',
+                    zIndex: 10,
+                  }}
+                  numberOfLines={0}
+                  ellipsizeMode="tail"
+                  selectable
+                >
+                  {htmlToPlainText(html) || '请输入文本'}
+                </Animated.Text>
+              </View>
+            </View>
           </TouchableOpacity>
         )}
-        <TouchableOpacity style={styles.delBtn} onPress={handleDeleteText}>
-          <Text style={{ color: '#e74c3c', fontWeight: 'bold' }}>×</Text>
-        </TouchableOpacity>
+        {/* 移除右下角缩放手柄，新增四边透明拖拽区 */}
+        <GestureDetector gesture={topResizeGesture}>
+          <Animated.View
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              width: '100%',
+              height: edgeHotWidth,
+              zIndex: 10,
+              // backgroundColor: 'rgba(0,0,255,0.05)', // 调试可开
+            }}
+            pointerEvents="box-only"
+          />
+        </GestureDetector>
+        <GestureDetector gesture={bottomResizeGesture}>
+          <Animated.View
+            style={{
+              position: 'absolute',
+              left: 0,
+              bottom: 0,
+              width: '100%',
+              height: edgeHotWidth,
+              zIndex: 10,
+              // backgroundColor: 'rgba(255,0,0,0.05)',
+            }}
+            pointerEvents="box-only"
+          />
+        </GestureDetector>
+        <GestureDetector gesture={leftResizeGesture}>
+          <Animated.View
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              width: edgeHotWidth,
+              height: '100%',
+              zIndex: 10,
+              // backgroundColor: 'rgba(0,0,0,0.05)',
+            }}
+            pointerEvents="box-only"
+          />
+        </GestureDetector>
+        <GestureDetector gesture={rightResizeGesture}>
+          <Animated.View
+            style={{
+              position: 'absolute',
+              right: 0,
+              top: 0,
+              width: edgeHotWidth,
+              height: '100%',
+              zIndex: 10,
+              // backgroundColor: 'rgba(0,0,0,0.05)',
+            }}
+            pointerEvents="box-only"
+          />
+        </GestureDetector>
       </Animated.View>
     </GestureDetector>
   );
 }
 
-// 文本模块主组件
-function CanvasTextModule({ props, extraParams }: { props: CustomCanvasProps; extraParams: any }) {
-  // 类型断言，兼容老数据
-  const textsInGlobal: RichTextBlockInfo[] = (props.globalData?.texts?.value || []).map((item: any) => ({
+const CanvasTextModule: React.FC<{ props: CustomCanvasProps; extraParams: any }> = ({ props, extraParams }) => {
+  const textsInGlobal: TextBlockInfo[] = (props.globalData?.texts?.value || []).map((item: any) => ({
     ...item,
-    content: item.content || '<p style="color:#333;font-size:18px;">请输入文本</p>',
-    width: item.width || 120,
-    height: item.height || 40,
+    text: typeof item.text === 'string' ? item.text : '<p style="color:#333;font-size:18px;">请输入文本</p>',
+    plainText: typeof item.plainText === 'string' ? item.plainText : '',
+    width: item.width || MIN_WIDTH,
+    height: item.height || MIN_HEIGHT,
   }));
-  const setTextsInGlobal: StateUpdater<RichTextBlockInfo[]> | undefined = props.globalData?.texts?.setValue as unknown as StateUpdater<RichTextBlockInfo[]>;
-  const [active, setActive] = useState<{ id: string | null; mode: 'drag' | 'resize' | 'edit' | null; corner?: 'br'|'tr'|'bl'|'tl' }>({ id: null, mode: null });
-  // 画布 transform 透传
-  const { canvasContentsTransform } = extraParams.contentsTransform || { canvasContentsTransform: { scale: 1, translateX: 0, translateY: 0 } };
+  const setTextsInGlobal: StateUpdater<TextBlockInfo[]> | undefined = props.globalData?.texts?.setValue as unknown as StateUpdater<TextBlockInfo[]>;
+  const canvasContentsTransform = useMemo(() =>
+    extraParams.contentsTransform?.value || { translateX: 0, translateY: 0, scale: 1 }
+    , [extraParams.contentsTransform]);
 
   // 点击空白处添加文本
   const handleAddText = useCallback((e: any) => {
     if (!setTextsInGlobal) return;
-    // 计算内容坐标（假设 e.nativeEvent 有 locationX/Y）
     const x = (e.nativeEvent?.locationX || 100) - (canvasContentsTransform?.translateX || 0);
     const y = (e.nativeEvent?.locationY || 100) - (canvasContentsTransform?.translateY || 0);
+    const defaultHtml = '<p style="color:#333;font-size:18px;">请输入文本</p>';
     setTextsInGlobal(prev => [
       ...prev,
       {
         id: Date.now().toString() + Math.random().toString(36).slice(2),
         x,
         y,
-        width: 120,
-        height: 40,
-        content: '<p style="color:#333;font-size:18px;">请输入文本</p>',
-        text: '', // Add the required 'text' property
+        width: MIN_WIDTH,
+        height: MIN_HEIGHT,
+        text: defaultHtml,
+        plainText: htmlToPlainText(defaultHtml),
+        fontSize: 17,
+        fontFamily: undefined,
+        fontColor: '#333',
+        isBold: false,
+        isItalic: false,
+        isUnderline: false,
       }
     ]);
   }, [setTextsInGlobal, canvasContentsTransform]);
 
   return (
-    <>
+    <View style={{ flex: 1 }}>
       {props.mode?.value === 'text' && (
         <TouchableOpacity style={StyleSheet.absoluteFill} onPress={handleAddText} activeOpacity={0.8}>
           <View style={{ flex: 1 }} />
         </TouchableOpacity>
       )}
-      {textsInGlobal.map((textBlock: RichTextBlockInfo) => (
+      {textsInGlobal.map((textBlock) => (
         <CanvasTextItem
           key={textBlock.id}
           textBlock={textBlock}
           textsInGlobal={textsInGlobal}
           setTextsInGlobal={setTextsInGlobal}
-          active={active}
-          setActive={setActive}
           contentsTransform={canvasContentsTransform}
         />
       ))}
-    </>
+    </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   textWrap: {
-    position: 'absolute', minWidth: 60, minHeight: 32, paddingHorizontal: 6, paddingVertical: 2, backgroundColor: '#fffbe6', borderRadius: 6, borderWidth: 1, borderColor: '#eee', flexDirection: 'row', alignItems: 'center',
+    position: 'absolute',
+    minWidth: MIN_WIDTH,
+    minHeight: MIN_HEIGHT,
+    // 移除 padding/backgroundColor/border 相关视觉样式，全部交给内容组件控制
+    // paddingHorizontal: 6,
+    // paddingVertical: 2,
+    // backgroundColor: '#fffbe6',
+    // borderRadius: 6,
+    // borderWidth: 1,
+    // borderColor: '#eee',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  text: {
-    minWidth: 40, minHeight: 28, fontSize: 18, color: '#333',
-  },
-  delBtn: {
-    marginLeft: 4, padding: 2, borderRadius: 8, backgroundColor: '#fff',
-  },
-  active: {
-    borderColor: '#ff9800', borderWidth: 2,
-    shadowColor: '#ff9800', shadowOpacity: 0.3, shadowRadius: 6, elevation: 4,
+  toolbarBtn: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 6,
+    padding: 6,
+    marginRight: 4,
   },
 });
 

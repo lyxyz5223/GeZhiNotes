@@ -130,7 +130,7 @@ export default function MainCanvas({ fileId }: MainCanvasProps) {
   const [themeModalVisible, setThemeModalVisible] = useState(false);
   const [themeIndex, setThemeIndex] = useState(0);
   const currentTheme = allThemes[themeIndex].value;
-
+  const [toolbarMaxWidth, setToolbarMaxWidth] = useState(Dimensions.get("window").width - 32);
   // 主题切换方法（弹窗方式）
   const handleToggleTheme = () => setThemeModalVisible(true);
 
@@ -143,6 +143,7 @@ export default function MainCanvas({ fileId }: MainCanvasProps) {
           : canvas
       )
     ));
+    setToolbarMaxWidth(width - 32); // 更新工具栏最大宽度
   }, []);
 
   // 添加新嵌入画布（居中）
@@ -192,9 +193,39 @@ export default function MainCanvas({ fileId }: MainCanvasProps) {
   // }, [undoRedo, globalState]);
 
   // 启动时自动读取
-  const username = 'user'; // 用户名
-  const password = 'hust'; // 密码
-  const apiUrl = 'http://192.168.202.88:8080/';
+  // const username = 'user'; // 用户名
+  // const password = 'hust'; // 密码
+  // const apiUrl = 'http://192.168.202.88:8080/';
+
+
+  // 启动时自动读取设置页配置
+  const [settings, setSettings] = useState<{ username: string, password: string, server: string }>({ username: '', password: '', server: '' });
+  useEffect(() => {
+    (async () => {
+      try {
+        const str = await AsyncStorage.getItem('GeZhiNotes:settings');
+        if (str) {
+          const obj = JSON.parse(str);
+          setSettings({
+            username: obj.username || '',
+            password: obj.password || '',
+            server: obj.server || ''
+          });
+        }
+      } catch { }
+    })();
+  }, []);
+
+  // 用设置页配置覆盖默认，直接用 settings.xxx 替换所有 username/password/apiUrl
+  const effectiveUsername = settings.username || 'user';
+  const effectivePassword = settings.password || 'hust';
+  const effectiveApiUrl = settings.server || 'http://192.168.202.88:8080/';
+
+
+  const username = effectiveUsername;
+  const password = effectivePassword;
+  const apiUrl = effectiveApiUrl;
+
   const token = useRef<string | null>(null);
   // 持久化存储 key
   const STORAGE_KEY = 'GeZhiNotes:canvasData';
@@ -239,7 +270,8 @@ export default function MainCanvas({ fileId }: MainCanvasProps) {
     // ...原有后端同步逻辑...
     fetch(apiUrl + 'user/save', {
       method: 'POST',
-      headers: {
+      headers:
+       {
         'Content-Type': 'application/json',
         'cookie': token.current || '',
       },
@@ -317,7 +349,7 @@ export default function MainCanvas({ fileId }: MainCanvasProps) {
       }
 
     });
-  });
+  }, [apiUrl, username, password]);
 
   // memo化 mode 和 fullscreen，避免对象引用频繁变化
   const modeObj = React.useMemo(() => ({ value: mode, setValue: setMode }), [mode, setMode]);
@@ -360,7 +392,7 @@ export default function MainCanvas({ fileId }: MainCanvasProps) {
           onLoad={handleLoad}
           toolbarPos={{ x: 16, y: 40 }}
           toolbarHorizontalMargin={16}
-          toolbarMaxWidth={Dimensions.get("window").width - 32}
+          toolbarMaxWidth={toolbarMaxWidth}
           toolbarDragging={false}
           toolbarPanHandlers={{}}
           onToggleTheme={handleToggleTheme}

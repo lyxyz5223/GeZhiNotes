@@ -54,3 +54,67 @@ export function mergeResponderHandlers(objA: any, objB: any) {
   });
   return merged;
 }
+/**
+ * 计算两个圆形画布之间的连接线点
+ * @param fromCanvas 起始画布
+ * @param toCanvas 目标画布
+ * @returns 连接线的起点和终点坐标，已考虑圆的半径
+ */
+export function calculateCanvasConnectionPoints(
+  fromCanvas: { x: number; y: number; width: number; height: number },
+  toCanvas: { x: number; y: number; width: number; height: number }
+) {  // 使用字符串连接方式安全地输出日志
+  console.log('计算连接点 - 输入');
+
+  if (
+    !fromCanvas ||
+    !toCanvas ||
+    typeof fromCanvas.x !== 'number' ||
+    typeof toCanvas.x !== 'number'
+  ) {
+    console.error('画布数据无效');
+    throw new Error('画布数据无效');
+  }
+
+  // 计算两个圆的中心点
+  const fromCenter = {
+    x: fromCanvas.x + fromCanvas.width / 2,
+    y: fromCanvas.y + fromCanvas.height / 2,
+  };
+  const toCenter = {
+    x: toCanvas.x + toCanvas.width / 2,
+    y: toCanvas.y + toCanvas.height / 2,
+  };
+  // 使用字符串连接方式安全地输出日志
+  console.log('中心点计算结果');
+
+  // 计算两个圆心之间的角度
+  const angle = Math.atan2(
+    toCenter.y - fromCenter.y,
+    toCenter.x - fromCenter.x
+  );
+  // 使用字符串连接方式安全地输出日志
+  console.log('角度计算结果: ' + angle);
+
+  // 计算圆的半径
+  const fromRadius = Math.min(fromCanvas.width, fromCanvas.height) / 2;
+  const toRadius = Math.min(toCanvas.width, toCanvas.height) / 2;  // 使用字符串连接方式安全地输出日志
+  console.log(
+    '半径计算结果: fromRadius: ' + fromRadius + ', toRadius: ' + toRadius
+  );
+
+  // 计算连接线实际起点和终点（从圆的边缘开始）
+  const startPoint = {
+    x: fromCenter.x + Math.cos(angle) * fromRadius,
+    y: fromCenter.y + Math.sin(angle) * fromRadius,
+  };
+
+  const endPoint = {
+    x: toCenter.x - Math.cos(angle) * toRadius,
+    y: toCenter.y - Math.sin(angle) * toRadius,
+  };
+  // 使用字符串连接方式安全地输出日志
+  console.log('最终连接点已计算');
+
+  return [startPoint, endPoint];
+}
