@@ -17,6 +17,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 'latest'
+      - name: Open Docs Directory
+        run: cd docs/GeZhiNotes
       - name: Install Dependencies
         run: npm ci
       - name: Build
