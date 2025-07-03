@@ -13,12 +13,12 @@ type ModeButtonProps = {
 const modeList: ModeButtonProps[] = [
   {
     mode: CanvasMode.Hand,
-    icon: "🔲",
+    icon: "👆",
     accessibilityLabel: "切换为拖动模式"
   },
   {
     mode: CanvasMode.Draw,
-    icon: "✏️",
+    icon: "🖊️",
     accessibilityLabel: "切换为绘图模式"
   },
   {

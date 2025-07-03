@@ -262,7 +262,6 @@ function CanvasTextItem({
       <Animated.View style={[
         styles.textWrap,
         animatedStyle,
-        // 显示边界高亮，编辑时为主题色，非编辑时为浅灰色
         {
           borderWidth: 2,
           borderColor: editing ? '#007aff' : '#e0e0e0',
@@ -273,6 +272,19 @@ function CanvasTextItem({
       ]}>
         {editing ? (
           <View style={{ flex: 1, minWidth: MIN_WIDTH, minHeight: MIN_HEIGHT }}>
+            {/* 删除按钮，绝对定位在文本块外部左上角 */}
+            <View style={{ position: 'absolute', left: -48, top: 0, zIndex: 20 }} pointerEvents="box-none">
+              <TouchableOpacity
+                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#ff3b30', alignItems: 'center', justifyContent: 'center', elevation: 2, pointerEvents: 'auto' }}
+                onPress={() => {
+                  if (setTextsInGlobal) {
+                    setTextsInGlobal(prev => prev.filter(item => item.id !== textBlock.id));
+                  }
+                }}
+              >
+                <Animated.Text style={{ color: '#fff', fontSize: 22 }}>🗑️</Animated.Text>
+              </TouchableOpacity>
+            </View>
             {/* 菜单按钮，绝对定位在文本块外部右上角，不遮挡输入区域 */}
             <View style={{ position: 'absolute', right: -48, top: 0, zIndex: 20 }} pointerEvents="box-none">
               <TouchableOpacity
