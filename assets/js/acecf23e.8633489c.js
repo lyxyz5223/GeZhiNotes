@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkGeZhiNotesDocs=self.webpackChunkGeZhiNotesDocs||[]).push([[1903],{9531:e=>{e.exports=JSON.parse('{"blogBasePath":"/GeZhiNotes/blog","blogTitle":"Blog","authorsListPath":"/GeZhiNotes/blog/authors"}')}}]);
