@@ -1,6 +1,6 @@
-import {themes as prismThemes} from 'prism-react-renderer';
-import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
+import type { Config } from '@docusaurus/types';
+import { themes as prismThemes } from 'prism-react-renderer';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
@@ -93,7 +93,7 @@ const config: Config = {
           position: 'left',
           label: '使用指南',
         },
-        {to: '/blog', label: '博客', position: 'left'},
+        {href: 'https://www.cnblogs.com/lyxyz5223', label: '博客', position: 'left'},
         {
           href: 'https://github.com/lyxyz5223/GeZhiNotes',
           label: 'GitHub',
