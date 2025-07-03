@@ -1,0 +1,13 @@
+FROM golang:1.24
+
+RUN apt update && apt install -y git
+
+WORKDIR /app
+
+COPY . .
+
+ENV GOOS=android
+ENV GOARCH=arm64
+ENV CGO_ENABLED=0
+
+RUN make

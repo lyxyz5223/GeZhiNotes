@@ -1,0 +1,22 @@
+version: "3.8"
+
+service:
+  Notors:
+    build: .
+    port:
+      - "8080:8080"
+  db:
+    image: "postgres"
+    port:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER : "postgres"
+      POSTGRES_PASSWORD : ""
+      POSTGRES_DB : "melina"
+    volumes:
+      - ./sql : /docker-entrypoint-initdb.d
+      - pg_volume :  /var/lib/postgres/temp
+  redis:
+    port:
+    - "6379:6379"
+  
