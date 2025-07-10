@@ -114,6 +114,7 @@ function CanvasDrawModule({ props, extraParams }: { props: CustomCanvasProps; ex
       if (!renderedPath) return;
       const newScreenPoint = { x: e.x, y: e.y };
       updateRenderedPath(renderedPath.points, newScreenPoint);
+      console.log('CanvasDrawModule current draw canvas id:', props.id);
     })
     .onEnd((e) => {
       willDraw.current = true; // 仅单指生效

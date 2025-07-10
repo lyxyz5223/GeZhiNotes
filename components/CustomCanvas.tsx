@@ -26,7 +26,24 @@ const CustomCanvas: React.FC<CustomCanvasProps> = (props) => {
   const canvasType = props.canvasType || CanvasType.Child; // 默认为子画布
   // 不要直接用这个状态，如需使用请使用 fullscreen.value 和 fullscreen.setValue，这个仅仅作为初始化用
   const [isFullscreen, setIsFullscreen] = useState(canvasType === CanvasType.Main);
-
+  props = {
+    ...props,
+    x: props.x || 0,
+    y: props.y || 0,
+    width: props.width || CANVAS_INIT_SIZE,
+    height: props.height || CANVAS_INIT_SIZE,
+    moveable: props.moveable || true,
+    resizeable: props.resizeable || true,
+    borderRadius: props.borderRadius || props.width / 2, // 默认圆形
+    fullscreen: props.fullscreen || {
+      value: isFullscreen,
+      setValue: setIsFullscreen
+    },
+    canvasTransform: props.canvasTransform || {
+      value: selfTransform,
+      setValue: setSelfTransform,
+    },
+  }
   const {
     id, parentId, x = 0, y = 0, width, height,
     style, onMoveResize, canvasBg, color, size, mode,
@@ -68,6 +85,7 @@ const CustomCanvas: React.FC<CustomCanvasProps> = (props) => {
     () => globalDataSetters(id),
     [globalDataSetters, id]
   );
+
   // 用 useMemo 缓存 globalData，避免每次渲染都新建对象
   const memoizedGlobalData = React.useMemo(() => ({ ...dataSetters }), [dataSetters]);
   
@@ -285,6 +303,7 @@ const CustomCanvas: React.FC<CustomCanvasProps> = (props) => {
   };
   // 统一遍历 RENDER_MODULE_LIST 渲染所有模块，自动依赖注入和手势包裹
   // allChildren 已在上方定义并生成
+  // 这个全屏状态管理有问题，所以交由画布自身管理，这个childFullscreenObj将不会被传递给子画布
   const [childFullscreenState, setChildFullscreenState] = useState(false);
   const childFullscreenObj = useMemo(() => ({
     value: childFullscreenState,
@@ -353,7 +372,7 @@ const CustomCanvas: React.FC<CustomCanvasProps> = (props) => {
                 mode={modeObj}
                 moveable={true}
                 resizeable={true}
-                fullscreen={childFullscreenObj}
+                // fullscreen={childFullscreenObj}
                 globalData={memoizedGlobalData}
                 globalState={props.globalState} // 传递全局状态
                 style={{

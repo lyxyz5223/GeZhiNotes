@@ -15,6 +15,7 @@ const useGestureHandleSystem = (canvasContext: CanvasContext, childrenGestures: 
       .numberOfTaps(2)
       .runOnJS(true)
       .onEnd((event: any) => {
+        console.log(canvasContext.fullscreen);
         setIsFullscreen((prev) => {
           if (canvasType === CanvasType.Child && !prev) {
             return true; // 进入全屏
