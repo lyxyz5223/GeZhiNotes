@@ -20,7 +20,7 @@ sidebar_position: 3
 
 ### 🖼️ 图片工具
 > 点击图片工具，在画布上点击即可添加本地图片。
-！[图片工具](tutorial-extras/img/图片工具.jpg)
+> ![图片工具](tutorial-extras/img/图片工具.jpg)
 
 ### 🎬 视频工具
 > 点击视频工具，在画布上点击即可添加本地或网络视频。

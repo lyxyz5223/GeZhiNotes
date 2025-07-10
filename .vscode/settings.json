@@ -4,5 +4,6 @@
     "source.organizeImports": "explicit",
     "source.sortMembers": "explicit"
   },
-  "Codegeex.RepoIndex": true
+  "Codegeex.RepoIndex": true,
+  "markdown.validate.enabled": true
 }
